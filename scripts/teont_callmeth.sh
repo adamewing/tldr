@@ -51,7 +51,7 @@ command -v tabix >/dev/null 2>&1 || { echo "tabix is not installed" >&2; exit 1;
 
 echo "fetching nanopolish methylation calls for $UUID sample $SAMPLE..."
 
-TSV=${CALLDIR}/${UUID}.te.meth.tsv
+TSV=${CALLDIR}/${SAMPLE}.${UUID}.te.meth.tsv
 
 nanopolish call-methylation -r $READS -g $CONS -b $BAM | sort -k3,3n > $TSV
 
