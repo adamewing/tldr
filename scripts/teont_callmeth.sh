@@ -55,7 +55,7 @@ TSV=${CALLDIR}/${SAMPLE}.${UUID}.te.meth.tsv
 
 nanopolish call-methylation -r $READS -g $CONS -b $BAM | sort -k3,3n > $TSV
 
-bgzip $TSV
+bgzip -f $TSV
 
 tabix -f -S 1 -s 1 -b 3 -e 4 ${TSV}.gz
 
