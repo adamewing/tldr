@@ -1194,8 +1194,6 @@ def process_cluster(cluster, inslib, outbase, args):
                     ext_ref = ref.fetch(cluster.chrom(), (cluster.breakpoints[0] - longest_read) - int(args.flanksize), cluster.breakpoints[1] + longest_read + int(args.flanksize))
                     ext_cons = minimap2_extend(ext_ref, cluster.cons)
 
-                    print(len(cluster.cons), len(ext_cons))
-
                     cons_out_fa = outbase + '/' + cluster.uuid + '.cons.ref.fa'
 
                     with open(cons_out_fa, 'w') as out:
