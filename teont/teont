@@ -1196,16 +1196,16 @@ def process_cluster(cluster, inslib, outbase, args):
                     if longest_read < 10000:
                         longest_read = 10000
 
-                    ext_start = (cluster.breakpoints[0] - longest_read) - int(args.flanksize)
-                    ext_end = cluster.breakpoints[1] + longest_read + int(args.flanksize)
+                    #ext_start = (cluster.breakpoints[0] - longest_read) - int(args.flanksize)
+                    #ext_end = cluster.breakpoints[1] + longest_read + int(args.flanksize)
 
-                    ext_ref = ref.fetch(cluster.chrom(), ext_start, ext_end)
-                    ext_cons = minimap2_extend(ext_ref, cluster.cons)
+                    #ext_ref = ref.fetch(cluster.chrom(), ext_start, ext_end)
+                    #ext_cons = minimap2_extend(ext_ref, cluster.cons)
 
                     cons_out_fa = outbase + '/' + cluster.uuid + '.cons.ref.fa'
 
                     with open(cons_out_fa, 'w') as out:
-                        out.write('>%s\n%s\n' % (cluster.uuid, ext_cons))
+                        out.write('>%s\n%s\n' % (cluster.uuid, cluster.cons))
 
                     for sample in samples:
                         # add surrounding reads to fq
@@ -1213,11 +1213,12 @@ def process_cluster(cluster, inslib, outbase, args):
 
                         per_bam_fq = '%s/%s.%s.cluster.fq' % (outbase, sample, cluster.uuid)
 
+                        usereads = [read.r_name for read in cluster.reads if read.useable]
                         
                         with open(per_bam_fq, 'w') as out_fq:
                             bam = pysam.AlignmentFile(bampath)
-                            for read in bam.fetch(cluster.chrom(), ext_start, ext_end):
-                                if not read.is_secondary and not read.is_supplementary:
+                            for read in bam.fetch(cluster.chrom(), int(cluster.breakpoints[0]) - int(args.flanksize), int(cluster.breakpoints[1]) + int(args.flanksize)):
+                                if not read.is_secondary and not read.is_supplementary and read.query_name in usereads:
                                     seq = read.seq
                                     qual = read.qual
 
