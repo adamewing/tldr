@@ -62,46 +62,88 @@ Synopsis (minimal input requirements), assuming reads aligned to hg38 using mini
 teont -b aligned_reads.bam -e /path/to/teont/ref/teref.human.fa -r /path/to/minimap2-indexed/reference/genome.fasta
 ```
 
-# Additional options:
+## Additional options
 
-## multiple .bam files
+### multiple .bam files
 Multiple .bam files can provided in a comma-delimited list.
 
-## -o/--outbase
+### -o/--outbase
 Specify a base name for output files. The default is to use the name of the input bam(s) without the .bam extension and joined with "_" if > 1 .bam file given
 
-## -p/--procs
+### -p/--procs
 Spread work over _p_ processes. Uses python multiprocessing.
 
-## -n/--nonref
+### -n/--nonref
 Annotate insertion with known non-reference insertion sites (examples provided in `/path/to/teont/ref`)
 
-## -c/--chroms
+### -c/--chroms
 Specify a text file of chromosome names (one per line) and teont will focus only on these.
 
-## -m/--minreads
+### -m/--minreads
 Minimum supporting read count to trigger a consensus / insertion call (default = 3)
 
-## --max_te_length
+### --max_te_length
 Maximum insertion size (default = 7000)
 
-## --min_te_len
+### --min_te_len
 Minimum insertion size (default = 200)
 
-## --wiggle
+### --wiggle
 Allows for sloppy breakpoints in initial breakpoint search (default = 50)
 
-## --flanksize
+### --flanksize
 Trim reads to contain at most `--flanksize` bases on either side of the insertion. Setting too large makes consensus building slower and more error-prone.
 
-## --mafft_threads
+### --mafft_threads
 Number of threads to give each mafft job (consensus building)
 
-## --color_consensus
+### --color_consensus
 This will annotate the consensus sequence with ANSI escape characters that yield coloured text on the command-line:
 red = TSD, blue = TE insertion sequence, yellow = non-TE insertion sequence
 
-## --detail_out
+### --detail_out
 Creates a directory (name is the output base name) with extended consensus sequences, per-insertion read mapping information and per-insertion .bam files
 
+## Output
 
+Some fields in the output table (basename.table.txt) may not be self-explainatory:
+
+### StartTE / EndTE
+Start / end position relative to TE consensus provided via `-e/--elts`
+
+### LengthIns
+Length of actual inserted sequence. _Not necessarily the same as EndTE-StartTE_
+
+### Inversion
+Internal inversion detected in TE
+
+### UnmapCover
+Fraction of inserted sequence covered by TE sequence
+
+### UsedReads
+Number of reads used in consensus generation
+
+### SpanReads
+Number of reads which completely embed the insertion
+
+### NumSamples
+Number of samples (.bam files) in which the insertion was detected
+
+### SampleReads
+Per-sample accounting of supporting reads
+
+### NonRef
+If `-n/--nonref` given, annotate whether insertion is a known non-reference insertion ("NA" otherwise)
+
+### TSD
+Target site duplication (based on reference genome)
+
+### Consensus
+Upper case bases = reference genome sequence, lower case bases = insertion sequence. If `--color_consensus` given TSD will be red, TE will be blue, other inserted sequence (e.g. transduction) will be yellow using ANSI terminal colours (may be affected by specific terminal config)
+
+### Filter
+Annotate whether an insertion call is problematic; "PASS" otherwise (similar to VCF filter column).
+
+## Getting help
+
+Reporting [issues](https://github.com/adamewing/teont/issues) and questions through github is preferred versus e-mail.
