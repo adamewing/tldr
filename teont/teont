@@ -8,7 +8,6 @@ import argparse
 import pickle
 import multiprocessing as mp
 import numpy as np
-#import scipy.stats as ss
 
 from uuid import uuid4
 from collections import defaultdict as dd
@@ -121,6 +120,7 @@ class MSA:
 
 class InsRead:
     def __init__(self, bamfile, q_chrom, q_start, q_end, r_start, r_end, r_name, r_seq, r_qual, is_ins, is_clip, clip_end):
+        self.bampath  = bamfile
         self.bamname  = '.'.join(os.path.basename(bamfile).split('.')[:-1])
         self.q_chrom  = q_chrom
         self.q_start  = q_start
@@ -563,6 +563,13 @@ class InsCluster:
             passed = False
 
         return passed
+
+    def bampath(self, sample):
+        for read in self.reads:
+            if read.bamname == sample:
+                return read.bampath
+
+        return None
 
     def __len__(self):
         return len(self.reads)
@@ -1090,13 +1097,8 @@ def process_cluster(cluster, inslib, outbase, args):
             cluster.cons = msa.consensus(gapped=False)
             cluster.cons = minimap2_pileup(cluster, dump_fq, outbase)
 
-            per_bam_fq = {}
-
             if te_type in inslib:
                 samples = list(set([read.bamname for read in cluster.reads if read.useable]))
-
-                for sample in samples:
-                    per_bam_fq[sample] = cluster.dump_fastq(te_fam=major_family, sample=sample)
 
                 ref_region = ref.fetch(cluster.chrom(), int(cluster.breakpoints[0]) - int(args.flanksize), int(cluster.breakpoints[1]) + int(args.flanksize))
                 
@@ -1191,7 +1193,13 @@ def process_cluster(cluster, inslib, outbase, args):
 
                     longest_read = max([len(read.r_seq) for read in cluster.reads if read.useable])
 
-                    ext_ref = ref.fetch(cluster.chrom(), (cluster.breakpoints[0] - longest_read) - int(args.flanksize), cluster.breakpoints[1] + longest_read + int(args.flanksize))
+                    if longest_read < 10000:
+                        longest_read = 10000
+
+                    ext_start = (cluster.breakpoints[0] - longest_read) - int(args.flanksize)
+                    ext_end = cluster.breakpoints[1] + longest_read + int(args.flanksize)
+
+                    ext_ref = ref.fetch(cluster.chrom(), ext_start, ext_end)
                     ext_cons = minimap2_extend(ext_ref, cluster.cons)
 
                     cons_out_fa = outbase + '/' + cluster.uuid + '.cons.ref.fa'
@@ -1200,7 +1208,28 @@ def process_cluster(cluster, inslib, outbase, args):
                         out.write('>%s\n%s\n' % (cluster.uuid, ext_cons))
 
                     for sample in samples:
-                        te_outbam = minimap2_bam(cons_out_fa, per_bam_fq[sample], '%s/%s.%s.te.bam' % (outbase, sample, cluster.uuid))
+                        # add surrounding reads to fq
+                        bampath = cluster.bampath(sample)
+
+                        per_bam_fq = '%s/%s.%s.cluster.fq' % (outbase, sample, cluster.uuid)
+
+                        
+                        with open(per_bam_fq, 'w') as out_fq:
+                            bam = pysam.AlignmentFile(bampath)
+                            for read in bam.fetch(cluster.chrom(), ext_start, ext_end):
+                                if not read.is_secondary and not read.is_supplementary:
+                                    seq = read.seq
+                                    qual = read.qual
+
+                                    if read.is_reverse:
+                                        seq = rc(seq)
+                                        qual = qual[::-1]
+
+                                    out_fq.write('@%s\n%s\n+\n%s\n' % (read.query_name, seq, qual))
+
+
+                        te_outbam = minimap2_bam(cons_out_fa, per_bam_fq, '%s/%s.%s.te.bam' % (outbase, sample, cluster.uuid))
+                        os.remove(per_bam_fq)
 
             else:
                 pass
@@ -1209,9 +1238,6 @@ def process_cluster(cluster, inslib, outbase, args):
             os.remove(msa_fa)
             os.remove(dump_fa)
             os.remove(dump_fq)
-
-            for fq in per_bam_fq.values():
-                os.remove(fq)
 
     return cluster
 
