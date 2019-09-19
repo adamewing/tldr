@@ -830,6 +830,64 @@ def minimap2_breakpoint(ref, cons, side):
     return None
 
 
+def minimap2_extend(ref, cons):
+
+    tmp_ref = str(uuid4()) + '.fa'
+    with open(tmp_ref, 'w') as out:
+        out.write('>ref\n%s\n' % ref.upper())
+
+    tmp_cons = str(uuid4()) + '.fa'
+    with open(tmp_cons, 'w') as out:
+        out.write('>cons\n%s\n' % cons.upper())
+
+    FNULL = open(os.devnull, 'w')
+
+    mm2_cmd  = ['minimap2', '-x', 'map-ont', '-Y', '-a', tmp_ref, tmp_cons]
+    view_cmd = ['samtools', 'view', '-b', '-']
+    aln  = subprocess.Popen(mm2_cmd, stdout=subprocess.PIPE, stderr=FNULL)
+    view = subprocess.Popen(view_cmd, stdin=aln.stdout, stdout=subprocess.PIPE, stderr=FNULL)
+
+    bamstream = pysam.AlignmentFile(view.stdout, 'rb')
+
+    map_ref_start  = None
+    map_ref_end    = None
+    map_cons_start = None
+    map_cons_end   = None
+
+    for read in bamstream:
+        if not read.is_unmapped:
+            for q, r in read.get_aligned_pairs(matches_only=True):
+                if map_ref_start is None:
+                    map_ref_start = r
+                    map_cons_start = q
+
+                elif map_ref_start > r:
+                    map_ref_start = r
+                    map_cons_start = q
+
+                if map_ref_end is None:
+                    map_ref_end = r
+                    map_cons_end = q
+
+                elif map_ref_end < r:
+                    map_ref_end = r
+                    map_cons_end = q
+
+
+    os.remove(tmp_ref)
+    os.remove(tmp_cons)
+
+    if None in (map_ref_start, map_ref_end, map_cons_start, map_cons_end):
+        return cons
+
+    extended_seq = ref[:map_ref_start] + cons[map_cons_start:map_cons_end] + ref[map_ref_end:]
+
+    if len(extended_seq) <= len(cons):
+        return cons
+
+    return extended_seq
+
+
 def minimap2_profile(ref, cons, max_de = 0.12):
     tmp_ref = str(uuid4()) + '.fa'
     with open(tmp_ref, 'w') as out:
@@ -1130,10 +1188,18 @@ def process_cluster(cluster, inslib, outbase, args):
 
 
                 if args.detail_output:
+
+                    longest_read = max([len(read.r_seq) for read in cluster.reads if read.useable])
+
+                    ext_ref = ref.fetch(cluster.chrom(), (cluster.breakpoints[0] - longest_read) - int(args.flanksize), cluster.breakpoints[1] + longest_read + int(args.flanksize))
+                    ext_cons = minimap2_extend(ext_ref, cluster.cons)
+
+                    print(len(cluster.cons), len(ext_cons))
+
                     cons_out_fa = outbase + '/' + cluster.uuid + '.cons.ref.fa'
 
                     with open(cons_out_fa, 'w') as out:
-                        out.write('>%s\n%s\n' % (cluster.uuid, cluster.cons))
+                        out.write('>%s\n%s\n' % (cluster.uuid, ext_cons))
 
                     for sample in samples:
                         te_outbam = minimap2_bam(cons_out_fa, per_bam_fq[sample], '%s/%s.%s.te.bam' % (outbase, sample, cluster.uuid))
