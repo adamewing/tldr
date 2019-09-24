@@ -1081,13 +1081,24 @@ def process_cluster(cluster, inslib, outbase, args):
 
             # set initial breakpoints from GMM
             r_pos_list = sorted([read.r_pos for read in cluster.reads if read.useable])
-            model = mixmodel(r_pos_list)
 
-            means = list(model.means_.reshape(1,-1)[0])
-            if len(means) == 1:
-                means.append(means[0])
+            if len(r_pos_list) == 0:
+                return None
 
-            cluster.breakpoints = sorted(map(round, means))
+            elif len(r_pos_list) == 1:
+                cluster.breakpoints = [r_pos_list[0], r_pos_list[0]]
+
+            elif len(r_pos_list) == 2:
+                cluster.breakpoints = r_pos_list
+
+            else:
+                model = mixmodel(r_pos_list)
+
+                means = list(model.means_.reshape(1,-1)[0])
+                if len(means) == 1:
+                    means.append(means[0])
+
+                cluster.breakpoints = sorted(map(round, means))
 
             dump_fa = cluster.dump_fasta(te_fam=major_family)
             dump_fq = cluster.dump_fastq(te_fam=major_family)
