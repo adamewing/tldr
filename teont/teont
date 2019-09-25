@@ -8,6 +8,7 @@ import argparse
 import pickle
 import multiprocessing as mp
 import numpy as np
+import gc
 
 from uuid import uuid4
 from collections import defaultdict as dd
@@ -649,6 +650,14 @@ def rc(dna):
     complements = str.maketrans('acgtrymkbdhvACGTRYMKBDHV', 'tgcayrkmvhdbTGCAYRKMVHDB')
     return dna.translate(complements)[::-1]
 
+def has_homopol(dna, n):
+    ''' true if homopolymer in (A,T,G,C) of length >= n in dna seq '''
+    dna = dna.upper()
+    for b in ('A','T','G','C'):
+        if b*int(n) in dna:
+            return True
+
+    return False
 
 def mafft(in_fn, iterations=1000, threads=1):
     ''' use MAFFT to create MSA '''
@@ -669,8 +678,10 @@ def mafft(in_fn, iterations=1000, threads=1):
     return out_fn
 
 
-def te_align(te_fa, refseq, minmatch=80.0, te_fa_is_seq=False, max_segs=3):
-    #print('te_align debug:')
+def te_align(te_fa, refseq, minmatch=80.0, te_fa_is_seq=False, max_segs=3, max_homopol=200):
+    if has_homopol(refseq, 200):
+        return None
+
     rnd = str(uuid4())
     tgt_fa = 'tmp.' + rnd + '.tgt.fa'
 
@@ -1473,6 +1484,7 @@ def main(args):
 
     for pickle_fn in pickles:
         clusters = []
+        gc.collect()
 
         with open(pickle_fn, 'rb') as p:
             p_clusters = pickle.load(p)
