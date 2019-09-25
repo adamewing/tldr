@@ -1461,9 +1461,10 @@ def main(args):
         res = pool.apply_async(build_clusters, [args, outbase, chrom])
         reslist.append(res)
 
-    clusters = []
-
     pickles = []
+
+    table_out = open(outbase+'.table.txt', 'w')
+    table_out.write('%s\n' % '\t'.join(header))
 
     for res in reslist:
         pickle_fn = res.get()
@@ -1471,133 +1472,133 @@ def main(args):
             pickles.append(pickle_fn)
 
     for pickle_fn in pickles:
+        clusters = []
+
         with open(pickle_fn, 'rb') as p:
             p_clusters = pickle.load(p)
             
-            if len(p_clusters) > 0:
-                logger.info('loaded %d clusters from %s' % (len(p_clusters), pickle_fn))
+            if len(p_clusters) == 0:
+                continue
 
-                for cluster in p_clusters.values():
-                    clusters.append(cluster)
+            logger.info('loaded %d clusters from %s' % (len(p_clusters), pickle_fn))
 
-        if not args.keep_pickles:
-            os.remove(pickle_fn)
+            clusters = p_clusters.values()
 
-    # parallelise cluster processing per cluster
-    reslist = []
-    for cluster in clusters:
-        res = pool.apply_async(process_cluster, [cluster, inslib, outbase, args])
-        reslist.append(res)
+            # parallelise cluster processing per cluster
+            reslist = []
+            for cluster in clusters:
+                res = pool.apply_async(process_cluster, [cluster, inslib, outbase, args])
+                reslist.append(res)
 
-    processed_clusters = []
-    for res in reslist:
-        processed_clusters.append(res.get()) 
+            processed_clusters = []
+            for res in reslist:
+                processed_clusters.append(res.get()) 
 
-    table_out = open(outbase+'.table.txt', 'w')
+            c_count = 0
 
-    table_out.write('%s\n' % '\t'.join(header))
+            for cluster in processed_clusters:
+                if cluster and cluster.cons:
 
-    c_count = 0
+                    nr = 'NA'
 
-    for cluster in processed_clusters:
-        if cluster and cluster.cons:
+                    if nonref:
+                        ins_start, ins_end = cluster.interval()
 
-            nr = 'NA'
+                        if cluster.chrom() in nonref.contigs:
+                            for nr in nonref.fetch(cluster.chrom(), ins_start, ins_end):
+                                nr = '_'.join(nr.strip().split())
 
-            if nonref:
-                ins_start, ins_end = cluster.interval()
+                    c_unmap = cluster.sorted_unmapped_segments()[0]
 
-                if cluster.chrom() in nonref.contigs:
-                    for nr in nonref.fetch(cluster.chrom(), ins_start, ins_end):
-                        nr = '_'.join(nr.strip().split())
+                    start_te    = 'NA'
+                    end_te      = 'NA'
+                    start_unmap = 'NA'
+                    end_unmap   = 'NA'
+                    unmap_cover = 'NA'
 
-            c_unmap = cluster.sorted_unmapped_segments()[0]
+                    if cluster.cons_te_align is not None:
+                        start_te = cluster.cons_te_align.min_qry_coord()
+                        end_te = cluster.cons_te_align.max_qry_coord()
+                        start_unmap = cluster.cons_te_align.min_tgt_coord()
+                        end_unmap = cluster.cons_te_align.max_tgt_coord()
+                        unmap_cover = (end_unmap-start_unmap)/(c_unmap[1] - c_unmap[0])
 
-            start_te    = 'NA'
-            end_te      = 'NA'
-            start_unmap = 'NA'
-            end_unmap   = 'NA'
-            unmap_cover = 'NA'
+                    output = od()
 
-            if cluster.cons_te_align is not None:
-                start_te = cluster.cons_te_align.min_qry_coord()
-                end_te = cluster.cons_te_align.max_qry_coord()
-                start_unmap = cluster.cons_te_align.min_tgt_coord()
-                end_unmap = cluster.cons_te_align.max_tgt_coord()
-                unmap_cover = (end_unmap-start_unmap)/(c_unmap[1] - c_unmap[0])
+                    output['UUID']        = cluster.uuid
+                    output['Chrom']       = cluster.chrom()
+                    output['Start']       = int(cluster.breakpoints[0])
+                    output['End']         = int(cluster.breakpoints[1])
+                    output['Strand']      = cluster.te_orientation()
+                    output['Family']      = cluster.te_major_family()
+                    output['Subfamily']   = cluster.te_major_subfam()
+                    output['StartTE']     = start_te
+                    output['EndTE']       = end_te
+                    output['LengthIns']   = c_unmap[1] - c_unmap[0]
+                    output['Inversion']   = cluster.detect_inversion()
+                    output['UnmapCover']  = unmap_cover
+                    output['UsedReads']   = cluster.te_useable_count()
+                    output['SpanReads']   = cluster.te_embedded_count()
+                    output['NumSamples']  = cluster.te_samples()
+                    output['SampleReads'] = cluster.te_sample_count()
+                    output['NonRef']      = nr
+                    output['TSD']         = cluster.tsd_seq
+                    output['Consensus']   = cluster.cons
+                    output['Remappable']  = cluster.breakpoints_remappable
+                    output['Filter']      = assign_filter(output)
 
-            output = od()
+                    detail = od()
 
-            output['UUID']        = cluster.uuid
-            output['Chrom']       = cluster.chrom()
-            output['Start']       = int(cluster.breakpoints[0])
-            output['End']         = int(cluster.breakpoints[1])
-            output['Strand']      = cluster.te_orientation()
-            output['Family']      = cluster.te_major_family()
-            output['Subfamily']   = cluster.te_major_subfam()
-            output['StartTE']     = start_te
-            output['EndTE']       = end_te
-            output['LengthIns']   = c_unmap[1] - c_unmap[0]
-            output['Inversion']   = cluster.detect_inversion()
-            output['UnmapCover']  = unmap_cover
-            output['UsedReads']   = cluster.te_useable_count()
-            output['SpanReads']   = cluster.te_embedded_count()
-            output['NumSamples']  = cluster.te_samples()
-            output['SampleReads'] = cluster.te_sample_count()
-            output['NonRef']      = nr
-            output['TSD']         = cluster.tsd_seq
-            output['Consensus']   = cluster.cons
-            output['Remappable']  = cluster.breakpoints_remappable
-            output['Filter']      = assign_filter(output)
+                    if args.detail_output:
+                        with open(outbase+'/'+cluster.uuid+'.detail.out', 'w') as detail_out:
+                            detail_out.write('%s\n' % '\t'.join(detail_header))
 
-            detail = od()
+                            for insread in cluster.reads:
+                                detail['Cluster']    = cluster.uuid
+                                detail['BamName']    = insread.bamname
+                                detail['ReadName']   = insread.r_name
+                                detail['IsSpanRead'] = insread.is_ins
+                                detail['TEAlign'] = 'NA'
 
-            if args.detail_output:
-                with open(outbase+'/'+cluster.uuid+'.detail.out', 'w') as detail_out:
-                    detail_out.write('%s\n' % '\t'.join(detail_header))
+                                if insread.te:
+                                    detail['TEAlign'] = '|'.join([','.join(a.original) for a in insread.te.alignments])
 
-                    for insread in cluster.reads:
-                        detail['Cluster']    = cluster.uuid
-                        detail['BamName']    = insread.bamname
-                        detail['ReadName']   = insread.r_name
-                        detail['IsSpanRead'] = insread.is_ins
-                        detail['TEAlign'] = 'NA'
+                                detail['TEOverlap'] = insread.te_overlap_frac()
+                                detail['Useable'] = insread.useable
+                                detail['RefPos'] = insread.r_pos
 
-                        if insread.te:
-                            detail['TEAlign'] = '|'.join([','.join(a.original) for a in insread.te.alignments])
+                                detail_out.write('%s\n' % '\t'.join(map(str, [detail[col] for col in detail_header])))
 
-                        detail['TEOverlap'] = insread.te_overlap_frac()
-                        detail['Useable'] = insread.useable
-                        detail['RefPos'] = insread.r_pos
+                    if args.color_consensus:
+                        C_YELLOW  = "\033[33m"
+                        C_BLUE    = "\033[34m"
+                        C_PINK    = "\033[91m"
+                        C_END     = "\033[0m"
 
-                        detail_out.write('%s\n' % '\t'.join(map(str, [detail[col] for col in detail_header])))
+                        col_seg = cluster.cons[c_unmap[0]:c_unmap[1]]
 
-            if args.color_consensus:
-                C_YELLOW  = "\033[33m"
-                C_BLUE    = "\033[34m"
-                C_PINK    = "\033[91m"
-                C_END     = "\033[0m"
+                        if cluster.cons_te_align is not None:
+                            col_seg=col_seg[:start_unmap] + C_BLUE + col_seg[start_unmap:end_unmap] + C_YELLOW + col_seg[end_unmap:]
 
-                col_seg = cluster.cons[c_unmap[0]:c_unmap[1]]
+                        tsd_len = 0
+                        if output['TSD'] != 'NA':
+                            tsd_len = len(output['TSD'])
 
-                if cluster.cons_te_align is not None:
-                    col_seg=col_seg[:start_unmap] + C_BLUE + col_seg[start_unmap:end_unmap] + C_YELLOW + col_seg[end_unmap:]
+                        tsd_1 = C_PINK + cluster.cons[c_unmap[0]-tsd_len:c_unmap[0]] + C_END
+                        tsd_2 = C_PINK + cluster.cons[c_unmap[1]:c_unmap[1]+tsd_len] + C_END
 
-                tsd_len = 0
-                if output['TSD'] != 'NA':
-                    tsd_len = len(output['TSD'])
+                        output['Consensus'] = cluster.cons[:c_unmap[0]-tsd_len]+tsd_1+C_YELLOW+col_seg+C_END+tsd_2+cluster.cons[c_unmap[1]+tsd_len:]
 
-                tsd_1 = C_PINK + cluster.cons[c_unmap[0]-tsd_len:c_unmap[0]] + C_END
-                tsd_2 = C_PINK + cluster.cons[c_unmap[1]:c_unmap[1]+tsd_len] + C_END
+                    table_out.write('%s\n' % '\t'.join(map(str, [output[col] for col in header])))
+                    c_count += 1
 
-                output['Consensus'] = cluster.cons[:c_unmap[0]-tsd_len]+tsd_1+C_YELLOW+col_seg+C_END+tsd_2+cluster.cons[c_unmap[1]+tsd_len:]
+            
+            logger.info('finished %s. wrote %d records to %s' % (pickle_fn, c_count, outbase+'.table.txt'))
 
-            table_out.write('%s\n' % '\t'.join(map(str, [output[col] for col in header])))
-            c_count += 1
+            if not args.keep_pickles:
+                os.remove(pickle_fn)
 
     table_out.close()
-
-    logger.info('finished. wrote %d records to %s' % (c_count, outbase+'.table.txt'))
 
 
 if __name__ == '__main__':
