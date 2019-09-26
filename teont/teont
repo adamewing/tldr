@@ -341,25 +341,30 @@ class InsCluster:
 
         cons = list(self.cons)
 
-        if left_corr < 0:
-            for b in range(left_orig, left_orig+abs(left_corr)):
-                cons[b] = cons[b].upper()
+        try:
+            if left_corr < 0:
+                for b in range(left_orig, left_orig+abs(left_corr)):
+                    cons[b] = cons[b].upper()
 
-        if left_corr > 0:
-            for b in range(left_orig-left_corr, left_orig):
-                cons[b] = cons[b].lower()
+            if left_corr > 0:
+                for b in range(left_orig-left_corr, left_orig):
+                    cons[b] = cons[b].lower()
 
-        if right_corr < 0:
-            for b in range(right_orig, right_orig+abs(right_corr)):
-                cons[b] = cons[b].lower()
+            if right_corr < 0:
+                for b in range(right_orig, right_orig+abs(right_corr)):
+                    cons[b] = cons[b].lower()
 
-        if right_corr > 0:
-            for b in range(right_orig-right_corr, right_orig):
-                cons[b] = cons[b].upper()
+            if right_corr > 0:
+                for b in range(right_orig-right_corr, right_orig):
+                    cons[b] = cons[b].upper()
 
-        if cons != self.cons:
-            self.cons = ''.join(cons)
-            return True
+            if cons != self.cons:
+                self.cons = ''.join(cons)
+                return True
+
+        except IndexError as e:
+            logger.warning('Index Error on consensus adjustment: %s %s:%s' % (self.uuid, self.chrom(), '-'.join(map(str, self.interval()))))
+            return False
 
         return False
 
@@ -1101,6 +1106,9 @@ def process_cluster(cluster, inslib, outbase, args):
 
             elif len(r_pos_list) == 2:
                 cluster.breakpoints = r_pos_list
+
+            elif len(set(r_pos_list)) == 1:
+                cluster.breakpoints = [r_pos_list[0], r_pos_list[0]]
 
             else:
                 model = mixmodel(r_pos_list)
