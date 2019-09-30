@@ -1636,7 +1636,7 @@ if __name__ == '__main__':
     parser.add_argument('--wiggle', default=50, help='interval padding for breakpoint search (default = 50)')
     parser.add_argument('--flanksize', default=500, help='flank size for read trimming (default = 500)')
     parser.add_argument('--mafft_threads', default=1)
-    parser.add_argument('--mafft_iter', default=100)
+    parser.add_argument('--mafft_iter', default=1000)
     parser.add_argument('-n', '--nonref', help='known nonref tabix', default=None)
     parser.add_argument('--debug', action='store_true', default=False)
     parser.add_argument('--color_consensus', action='store_true', default=False)
