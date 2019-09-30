@@ -669,7 +669,7 @@ def mafft(in_fn, iterations=1000, threads=1):
 
     out_fn = '.'.join(in_fn.split('.')[:-1]) + '.msa.fa'
 
-    args = ['mafft', '--maxiterate', str(iterations), '--thread', str(threads), in_fn]
+    args = ['mafft', '--maxiterate', str(iterations), '--randomseed', '1', '--thread', str(threads), in_fn]
 
     FNULL = open(os.devnull, 'w')
 
@@ -1063,6 +1063,7 @@ def alter_ref(ins_ref, pileup, depth):#, filter_start, filter_end):
 def process_cluster(cluster, inslib, outbase, args):
     minreads = int(args.minreads)
     mafft_threads = int(args.mafft_threads)
+    mafft_iter = int(args.mafft_iter)
     te_lib = args.elts
     ref = pysam.Fastafile(args.ref)
 
@@ -1121,7 +1122,7 @@ def process_cluster(cluster, inslib, outbase, args):
 
             dump_fa = cluster.dump_fasta(te_fam=major_family)
             dump_fq = cluster.dump_fastq(te_fam=major_family)
-            msa_fa = mafft(dump_fa, threads=mafft_threads)
+            msa_fa = mafft(dump_fa, iterations=mafft_iter, threads=mafft_threads)
             msa = MSA(msa_fa)
 
             cluster.cons = msa.consensus(gapped=False)
@@ -1635,6 +1636,7 @@ if __name__ == '__main__':
     parser.add_argument('--wiggle', default=50, help='interval padding for breakpoint search (default = 50)')
     parser.add_argument('--flanksize', default=500, help='flank size for read trimming (default = 500)')
     parser.add_argument('--mafft_threads', default=1)
+    parser.add_argument('--mafft_iter', default=100)
     parser.add_argument('-n', '--nonref', help='known nonref tabix', default=None)
     parser.add_argument('--debug', action='store_true', default=False)
     parser.add_argument('--color_consensus', action='store_true', default=False)
