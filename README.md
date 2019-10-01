@@ -59,7 +59,7 @@ python setup.py install
 
 Synopsis (minimal input requirements), assuming reads aligned to hg38 using minimap2:
 ```
-teont -b aligned_reads.bam -e /path/to/teont/ref/teref.human.fa -r /path/to/minimap2-indexed/reference/genome.fasta
+TLDR -b aligned_reads.bam -e /path/to/TLDR/ref/teref.human.fa -r /path/to/minimap2-indexed/reference/genome.fasta
 ```
 
 ## Additional options
@@ -74,10 +74,10 @@ Specify a base name for output files. The default is to use the name of the inpu
 Spread work over _p_ processes. Uses python multiprocessing.
 
 ### -n/--nonref
-Annotate insertion with known non-reference insertion sites (examples provided in `/path/to/teont/ref`)
+Annotate insertion with known non-reference insertion sites (examples provided in `/path/to/TLDR/ref`)
 
 ### -c/--chroms
-Specify a text file of chromosome names (one per line) and teont will focus only on these.
+Specify a text file of chromosome names (one per line) and TLDR will focus only on these.
 
 ### -m/--minreads
 Minimum supporting read count to trigger a consensus / insertion call (default = 3)

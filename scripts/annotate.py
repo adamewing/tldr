@@ -34,7 +34,7 @@ def main(args):
             print(line.strip() + '\t' + ','.join(annotations))
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='annotate tebreak table')
+    parser = argparse.ArgumentParser(description='annotate TLDR table')
     parser.add_argument('-t', '--table', required=True)
     parser.add_argument('-x', '--tabix', required=True)
     parser.add_argument('-n', '--name', required=True)

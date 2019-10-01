@@ -66,8 +66,8 @@ setup(
     author_email='adam.ewing@gmail.com',
     description=("Insertion finder for long noisy reads"),
     license='MIT',
-    url='https://github.com/adamewing/teont',
-    scripts=['teont/teont'],
+    url='https://github.com/adamewing/tldr',
+    scripts=['tldr/tldr'],
     packages=find_packages(),
     install_requires = [
         'pysam>=0.8.1',
