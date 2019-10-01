@@ -1,6 +1,6 @@
-## teONT
+## TLDR
 
-*TE insertion detection in long-read error-prone sequencing data*
+*Transposons from Long Dirty Reads*
 
 # Installation
 
