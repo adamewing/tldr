@@ -4,7 +4,7 @@
 
 # Installation
 
-teONT requires python > 3.6 and has the following dependencies:
+TLDR requires python > 3.6 and has the following dependencies:
 
 ## HTSLIB / SAMtools
 Easiest method is via conda:
@@ -49,13 +49,13 @@ For manual installation see the [exonerate website](https://www.ebi.ac.uk/about/
 
 # Install
 
-Install teONT package + python dependencies:
+Install TLDR package + python dependencies:
 
 ```
 python setup.py install
 ```
 
-# Running teONT
+# Running TLDR
 
 Synopsis (minimal input requirements), assuming reads aligned to hg38 using minimap2:
 ```
@@ -146,4 +146,4 @@ Annotate whether an insertion call is problematic; "PASS" otherwise (similar to 
 
 ## Getting help
 
-Reporting [issues](https://github.com/adamewing/teont/issues) and questions through github is preferred versus e-mail.
+Reporting [issues](https://github.com/adamewing/TLDR/issues) and questions through github is preferred versus e-mail.
