@@ -60,7 +60,7 @@ if __name__ == '__main__':
     if not check_exonerate(): sys.exit('Dependency problem: exonerate not found')
 
 setup(
-    name='teONT',
+    name='TLDR',
     version='0.1',
     author='Adam Ewing',
     author_email='adam.ewing@gmail.com',
