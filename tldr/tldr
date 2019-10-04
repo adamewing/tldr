@@ -1630,7 +1630,7 @@ if __name__ == '__main__':
     parser.add_argument('-m', '--minreads', default=3, help='minimum read count to form cluster (default = 3)')
     parser.add_argument('-o', '--outbase', default=None, help='base name for output files (defaults to bam name(s)')
     parser.add_argument('-c', '--chroms', default=None, help='limit to chromsomes in file')
-    parser.add_argument('--max_te_len', default=7000, help='maximum insertion size (default = 7000)')
+    parser.add_argument('--max_te_len', default=10000, help='maximum insertion size (default = 10000)')
     parser.add_argument('--min_te_len', default=200, help='minimum insertion size (default = 200)')
     parser.add_argument('--wiggle', default=50, help='interval padding for breakpoint search (default = 50)')
     parser.add_argument('--flanksize', default=500, help='flank size for read trimming (default = 500)')
