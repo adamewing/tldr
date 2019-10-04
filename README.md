@@ -1,10 +1,10 @@
-## TLDR
+## tldr
 
 *Transposons from Long Dirty Reads*
 
 # Installation
 
-TLDR requires python > 3.6 and has the following dependencies:
+tldr requires python > 3.6 and has the following dependencies:
 
 ## HTSLIB / SAMtools
 Easiest method is via conda:
@@ -49,17 +49,17 @@ For manual installation see the [exonerate website](https://www.ebi.ac.uk/about/
 
 # Install
 
-Install TLDR package + python dependencies:
+Install tldr package + python dependencies:
 
 ```
 python setup.py install
 ```
 
-# Running TLDR
+# Running tldr
 
 Synopsis (minimal input requirements), assuming reads aligned to hg38 using minimap2:
 ```
-TLDR -b aligned_reads.bam -e /path/to/TLDR/ref/teref.human.fa -r /path/to/minimap2-indexed/reference/genome.fasta
+tldr -b aligned_reads.bam -e /path/to/tldr/ref/teref.human.fa -r /path/to/minimap2-indexed/reference/genome.fasta
 ```
 
 ## Additional options
@@ -74,10 +74,10 @@ Specify a base name for output files. The default is to use the name of the inpu
 Spread work over _p_ processes. Uses python multiprocessing.
 
 ### -n/--nonref
-Annotate insertion with known non-reference insertion sites (examples provided in `/path/to/TLDR/ref`)
+Annotate insertion with known non-reference insertion sites (examples provided in `/path/to/tldr/ref`)
 
 ### -c/--chroms
-Specify a text file of chromosome names (one per line) and TLDR will focus only on these.
+Specify a text file of chromosome names (one per line) and tldr will focus only on these.
 
 ### -m/--minreads
 Minimum supporting read count to trigger a consensus / insertion call (default = 3)
@@ -146,4 +146,4 @@ Annotate whether an insertion call is problematic; "PASS" otherwise (similar to 
 
 ## Getting help
 
-Reporting [issues](https://github.com/adamewing/TLDR/issues) and questions through github is preferred versus e-mail.
+Reporting [issues](https://github.com/adamewing/tldr/issues) and questions through github is preferred versus e-mail.
