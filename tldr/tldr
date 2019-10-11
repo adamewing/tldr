@@ -1372,8 +1372,17 @@ def build_clusters(args, outbase, chrom):
     return None
 
 
-def assign_filter(output):
+def assign_filter(output, c_unmap, args):
     filters = []
+
+    left_flank_len = c_unmap[0]
+    right_flank_len = len(output['Consensus']) - c_unmap[1]
+
+    if left_flank_len*2 < int(args.flanksize) or left_flank_len > int(args.flanksize)*2:
+        filters.append('LeftFlankSize')
+
+    if right_flank_len*2 < int(args.flanksize) or right_flank_len > int(args.flanksize)*2:
+        filters.append('RightFlankSize')
 
     if output['UnmapCover'] == 'NA':
         filters.append('UnmapCoverNA')
@@ -1393,6 +1402,9 @@ def assign_filter(output):
     if 'NA' not in (output['StartTE'], output['EndTE']):
         if (output['EndTE'] - output['StartTE'])*2 < output['LengthIns']:
             filters.append('TEMapTooLong')
+
+    if len(output['TSD']) > 100:
+        filters.append('TSDOver100bp')
 
     if len(filters) > 0:
         return ','.join(filters)
@@ -1565,7 +1577,7 @@ def main(args):
                     output['TSD']         = cluster.tsd_seq
                     output['Consensus']   = cluster.cons
                     output['Remappable']  = cluster.breakpoints_remappable
-                    output['Filter']      = assign_filter(output)
+                    output['Filter']      = assign_filter(output, c_unmap, args)
 
                     detail = od()
 
@@ -1632,7 +1644,7 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--chroms', default=None, help='limit to chromsomes in file')
     parser.add_argument('--max_te_len', default=10000, help='maximum insertion size (default = 10000)')
     parser.add_argument('--min_te_len', default=200, help='minimum insertion size (default = 200)')
-    parser.add_argument('--wiggle', default=50, help='interval padding for breakpoint search (default = 50)')
+    parser.add_argument('--wiggle', default=200, help='interval padding for breakpoint search (default = 50)')
     parser.add_argument('--flanksize', default=500, help='flank size for read trimming (default = 500)')
     parser.add_argument('-n', '--nonref', help='known nonref tabix', default=None)
     parser.add_argument('--debug', action='store_true', default=False)
