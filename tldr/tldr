@@ -1401,10 +1401,14 @@ def assign_filter(output, c_unmap, args):
 
     if 'NA' not in (output['StartTE'], output['EndTE']):
         if (output['EndTE'] - output['StartTE'])*2 < output['LengthIns']:
-            filters.append('TEMapTooLong')
+            if output['Family'] not in accordion_elts:
+                filters.append('TEMapTooLong')
 
     if len(output['TSD']) > 100:
         filters.append('TSDOver100bp')
+
+    if output['LengthIns'] < int(args.min_te_len):
+        filters.append('ShortIns')
 
     if len(filters) > 0:
         return ','.join(filters)
@@ -1447,7 +1451,11 @@ detail_header = [
 'Useable',
 'RefPos'
 ]
-                    
+
+accordion_elts = [
+'SVA'
+]
+
 
 def main(args):
 
