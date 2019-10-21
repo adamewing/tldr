@@ -755,7 +755,7 @@ def load_falib(infa):
     return seqdict
 
 
-def minimap2_pileup(cluster, dump_fq, outbase, min_alt_depth=3, min_alt_frac=.5, min_total_depth_frac=0.25):
+def minimap2_pileup(cluster, dump_fq, outbase, min_alt_depth=3, min_alt_frac=.5, min_total_depth_frac=0.05):
     out_name = cluster.uuid
     ins_ref = cluster.cons
 
@@ -784,7 +784,7 @@ def minimap2_pileup(cluster, dump_fq, outbase, min_alt_depth=3, min_alt_frac=.5,
         pileup[int(c[1])] = parse_pileup(c[4])
         depth[int(c[1])] = int(c[3])
 
-    altered_ref = alter_ref(ins_ref, pileup, depth, cluster.te_align_count(), min_alt_depth=3, min_alt_frac=.5, min_total_depth_frac=0.25)#, filter_start, filter_end)
+    altered_ref = alter_ref(ins_ref, pileup, depth, cluster.te_align_count(), min_alt_depth=min_alt_depth, min_alt_frac=min_alt_frac, min_total_depth_frac=min_total_depth_frac)
 
     os.remove(tmp_ref)
 
@@ -1025,7 +1025,7 @@ def mixmodel(pos, reg_covar=1e-4, max_iter=1000, max_pos=2):
     return models[np.argmin(AIC)] # best-fit mixture
 
 
-def alter_ref(ins_ref, pileup, depth, te_align_count, min_alt_depth=3, min_alt_frac=.5, min_total_depth_frac=0.25):#, filter_start, filter_end):
+def alter_ref(ins_ref, pileup, depth, te_align_count, min_alt_depth=3, min_alt_frac=.5, min_total_depth_frac=0.1):#, filter_start, filter_end):
     altered = []
 
     # mpileup coords are 1-based
@@ -1033,7 +1033,7 @@ def alter_ref(ins_ref, pileup, depth, te_align_count, min_alt_depth=3, min_alt_f
 
         if i in pileup:
             if depth[i] < te_align_count*min_total_depth_frac:
-                print('%d: ref %s, dropped at depth %d, pileup: %s' % (i, b, depth[i], str(pileup[i])))
+                #print('%d: ref %s, dropped at depth %d, te_align_count: %d, mtdf: %f, pileup: %s' % (i, b, depth[i], te_align_count, min_total_depth_frac, str(pileup[i])))
                 continue
 
             snv_p = [p for p in pileup[i] if p[0] not in ('+', '-', '.', ',')]
@@ -1658,7 +1658,7 @@ if __name__ == '__main__':
     parser.add_argument('--min_te_len', default=200, help='minimum insertion size (default = 200)')
     parser.add_argument('--min_alt_frac', default=0.5, help='parameter for base cahnges in consensus cleanup (defult=0.5)')
     parser.add_argument('--min_alt_depth', default=3, help='parameter for base cahnges in consensus cleanup (defult=3)')
-    parser.add_argument('--min_total_depth_frac', default=0.25, help='parameter for base cahnges in consensus cleanup (defult=0.25)')
+    parser.add_argument('--min_total_depth_frac', default=0.1, help='parameter for base cahnges in consensus cleanup (defult=0.25)')
     parser.add_argument('--wiggle', default=200, help='interval padding for breakpoint search (default = 50)')
     parser.add_argument('--flanksize', default=500, help='flank size for read trimming (default = 500)')
     parser.add_argument('-n', '--nonref', help='known nonref tabix', default=None)
