@@ -755,7 +755,7 @@ def load_falib(infa):
     return seqdict
 
 
-def minimap2_pileup(cluster, dump_fq, outbase):
+def minimap2_pileup(cluster, dump_fq, outbase, min_alt_depth=3, min_alt_frac=.5, min_total_depth_frac=0.25):
     out_name = cluster.uuid
     ins_ref = cluster.cons
 
@@ -784,7 +784,7 @@ def minimap2_pileup(cluster, dump_fq, outbase):
         pileup[int(c[1])] = parse_pileup(c[4])
         depth[int(c[1])] = int(c[3])
 
-    altered_ref = alter_ref(ins_ref, pileup, depth)#, filter_start, filter_end)
+    altered_ref = alter_ref(ins_ref, pileup, depth, cluster.te_align_count(), min_alt_depth=3, min_alt_frac=.5, min_total_depth_frac=0.25)#, filter_start, filter_end)
 
     os.remove(tmp_ref)
 
@@ -1025,13 +1025,17 @@ def mixmodel(pos, reg_covar=1e-4, max_iter=1000, max_pos=2):
     return models[np.argmin(AIC)] # best-fit mixture
 
 
-def alter_ref(ins_ref, pileup, depth):#, filter_start, filter_end):
+def alter_ref(ins_ref, pileup, depth, te_align_count, min_alt_depth=3, min_alt_frac=.5, min_total_depth_frac=0.25):#, filter_start, filter_end):
     altered = []
 
     # mpileup coords are 1-based
     for i, b in enumerate(ins_ref, 1):
 
         if i in pileup:
+            if depth[i] < te_align_count*min_total_depth_frac:
+                print('%d: ref %s, dropped at depth %d, pileup: %s' % (i, b, depth[i], str(pileup[i])))
+                continue
+
             snv_p = [p for p in pileup[i] if p[0] not in ('+', '-', '.', ',')]
             ins_p = [p for p in pileup[i] if p[0] == '+']
 
@@ -1047,13 +1051,13 @@ def alter_ref(ins_ref, pileup, depth):#, filter_start, filter_end):
             if ins_p:
                 ins_seq, ins_count = Counter(ins_p).most_common()[0]
 
-            if alt_count > depth[i]*.5 and alt_count >= 3:
+            if alt_count > depth[i]*min_alt_frac and alt_count >= min_alt_depth:
                 #print('%d: ref %s, alt %s, pileup: %s' % (i, b, alt_base, str(pileup[i])))
                 b = alt_base
 
-            if ins_count > depth[i]*.5 and ins_count >= 3:
+            if ins_count > depth[i]*min_alt_frac and ins_count >= min_alt_depth:
                 #print('%d: ref %s, ins %s, pileup: %s' % (i, b, ins_seq, str(pileup[i])))
-                b += ins_seq.lstrip('+-')
+                b += ins_seq.lstrip('+')
 
             if b != '*': # deletion
                 altered.append(b)
@@ -1125,7 +1129,7 @@ def process_cluster(cluster, inslib, outbase, args):
             msa = MSA(msa_fa)
 
             cluster.cons = msa.consensus(gapped=False)
-            cluster.cons = minimap2_pileup(cluster, dump_fq, outbase)
+            cluster.cons = minimap2_pileup(cluster, dump_fq, outbase, min_alt_depth=int(args.min_alt_depth), min_alt_frac=float(args.min_alt_frac), min_total_depth_frac=float(args.min_total_depth_frac))
 
             if te_type in inslib:
                 samples = list(set([read.bamname for read in cluster.reads if read.useable]))
@@ -1652,6 +1656,9 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--chroms', default=None, help='limit to chromsomes in file')
     parser.add_argument('--max_te_len', default=10000, help='maximum insertion size (default = 10000)')
     parser.add_argument('--min_te_len', default=200, help='minimum insertion size (default = 200)')
+    parser.add_argument('--min_alt_frac', default=0.5, help='parameter for base cahnges in consensus cleanup (defult=0.5)')
+    parser.add_argument('--min_alt_depth', default=3, help='parameter for base cahnges in consensus cleanup (defult=3)')
+    parser.add_argument('--min_total_depth_frac', default=0.25, help='parameter for base cahnges in consensus cleanup (defult=0.25)')
     parser.add_argument('--wiggle', default=200, help='interval padding for breakpoint search (default = 50)')
     parser.add_argument('--flanksize', default=500, help='flank size for read trimming (default = 500)')
     parser.add_argument('-n', '--nonref', help='known nonref tabix', default=None)
