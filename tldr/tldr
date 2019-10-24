@@ -1224,22 +1224,24 @@ def process_cluster(cluster, inslib, outbase, args):
 
 
                 if args.detail_output:
+                    out_cons = cluster.cons
 
-                    longest_read = max([len(read.r_seq) for read in cluster.reads if read.useable])
+                    out_start = int(cluster.breakpoints[0]) - int(args.flanksize)
+                    out_end = int(cluster.breakpoints[1]) + int(args.flanksize)
 
-                    if longest_read < 10000:
-                        longest_read = 10000
+                    if int(args.extend_consensus) > 0:
+                        ext_bases = int(args.extend_consensus)
 
-                    #ext_start = (cluster.breakpoints[0] - longest_read) - int(args.flanksize)
-                    #ext_end = cluster.breakpoints[1] + longest_read + int(args.flanksize)
+                        out_start -= ext_bases
+                        out_end += ext_bases
 
-                    #ext_ref = ref.fetch(cluster.chrom(), ext_start, ext_end)
-                    #ext_cons = minimap2_extend(ext_ref, cluster.cons)
+                        ext_ref = ref.fetch(cluster.chrom(), out_start, out_end)
+                        out_cons = minimap2_extend(ext_ref, cluster.cons)
 
                     cons_out_fa = outbase + '/' + cluster.uuid + '.cons.ref.fa'
 
                     with open(cons_out_fa, 'w') as out:
-                        out.write('>%s\n%s\n' % (cluster.uuid, cluster.cons))
+                        out.write('>%s\n%s\n' % (cluster.uuid, out_cons))
 
                     for sample in samples:
                         # add surrounding reads to fq
@@ -1251,8 +1253,8 @@ def process_cluster(cluster, inslib, outbase, args):
                         
                         with open(per_bam_fq, 'w') as out_fq:
                             bam = pysam.AlignmentFile(bampath)
-                            for read in bam.fetch(cluster.chrom(), int(cluster.breakpoints[0]) - int(args.flanksize), int(cluster.breakpoints[1]) + int(args.flanksize)):
-                                if not read.is_secondary and not read.is_supplementary and read.query_name in usereads:
+                            for read in bam.fetch(cluster.chrom(), out_start, out_end):
+                                if not read.is_secondary and not read.is_supplementary:
                                     seq = read.seq
                                     qual = read.qual
 
@@ -1665,6 +1667,7 @@ if __name__ == '__main__':
     parser.add_argument('--debug', action='store_true', default=False)
     parser.add_argument('--color_consensus', action='store_true', default=False)
     parser.add_argument('--detail_output', action='store_true', default=False, help='outputs per-insertion .bams and per-read mapping information')
+    parser.add_argument('--extend_consensus', default=0, help='if --detail_output option is enabled, extend output per-sample consensus by n bases (default 0)')
     parser.add_argument('--keep_pickles', action='store_true', default=False, help='do not remove per-chromosome pickle files')
     args = parser.parse_args()
     main(args)
