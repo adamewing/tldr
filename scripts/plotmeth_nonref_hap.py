@@ -566,6 +566,7 @@ def main(args):
         ax5.plot(list(windowed_methfrac.keys()), list(windowed_methfrac.values()), marker='', color=phase_color[phase])
 
     ax5.set_xlim(ax1.get_xlim())
+    ax5.set_ylim((-0.05,1.05))
 
     fig.set_size_inches(16, 8)
 
