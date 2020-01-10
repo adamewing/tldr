@@ -300,7 +300,7 @@ def main(args):
         elt_start = 0
         elt_end = len(cons_seq)
 
-        fn_prefix = sample + '.' + args.uuid
+        fn_prefix = '.'.join((args.sample, args.uuid, ins['Chrom'], str(ins['Start']), ins['Subfamily']))
 
         h_start, h_end = sorted_unmapped_segments(cons_seq)[0]
         h_cpg_start = None
@@ -424,7 +424,7 @@ def main(args):
 
     genes = []
     if gtf is not None:
-        genes = build_genes(gtf, chrom, elt_start, elt_end)
+        genes = build_genes(gtf, ins['Chrom'], int(ins['Start'])-int(args.windowsize), int(ins['End'])+int(args.windowsize))
 
     exon_patches = []
     tx_lines = []
@@ -436,13 +436,14 @@ def main(args):
 
     i = 0
     for ensg in genes:
+        window_offset = int(ins['Start'])-int(args.windowsize)
+
         if genes_of_interest:
             if genes[ensg].name not in genes_of_interest:
                 continue
 
         if genes[ensg].has_tx():
-
-            tx_lines.append(matplotlib.lines.Line2D([genes[ensg].tx_start-elt_start, genes[ensg].tx_end-elt_start], [0.4, 0.4], zorder=1))
+            tx_lines.append(matplotlib.lines.Line2D([genes[ensg].tx_start-window_offset, genes[ensg].tx_end-window_offset], [0.4+i, 0.4+i], zorder=1))
 
             print('transcript: %d-%d %s' % (genes[ensg].tx_start, genes[ensg].tx_end, genes[ensg].name))
 
@@ -450,7 +451,7 @@ def main(args):
         for exon_start, exon_end in genes[ensg].exons:
             exon_len = exon_end - exon_start
 
-            exon_patches.append(matplotlib.patches.Rectangle([exon_start-elt_start, i], exon_len, 0.8, edgecolor='#777777', facecolor='#ff4500', zorder=2))
+            exon_patches.append(matplotlib.patches.Rectangle([exon_start-window_offset, i], exon_len, 0.8, edgecolor='#777777', facecolor='#ff4500', zorder=2))
 
 
         blocks_str = ','.join(['%d-%d' % (s,e) for s, e in genes[ensg].exons])
@@ -596,6 +597,7 @@ if __name__ == '__main__':
     parser.add_argument('-u', '--uuid', required=True, help='target UUID')
     parser.add_argument('-s', '--sample', required=True)
     parser.add_argument('-c', '--cutoff', default=2.5, help='llr cutoff (absolute value), default=2.5')
+    parser.add_argument('-w', '--windowsize', required=True)
     parser.add_argument('--slidingwindowsize', default=10, help='size of sliding window for smoothed plot (default=10)')
     parser.add_argument('--slidingwindowstep', default=2, help='size of sliding window for smoothed plot (default=2)')
     parser.add_argument('--methcall_ymax', default=None)
