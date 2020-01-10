@@ -21,7 +21,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-sns.set_palette('viridis', n_colors=2)
+#sns.set_palette('viridis', n_colors=2)
 
 from matplotlib import gridspec
 from matplotlib.patches import ConnectionPatch
@@ -165,11 +165,11 @@ def get_reads(fn, min_mapq=10, tag_untagged=False, ignore_tags=False):
     return reads
 
 
-def slide_window(meth_table, phase, width=20, slide=5):
+def slide_window(meth_table, sample, width=20, slide=5):
     midpt_min = min(meth_table['loc'])
     midpt_max = max(meth_table['loc'])
 
-    phase_table = meth_table.loc[meth_table['phase'] == phase]
+    sample_table = meth_table.loc[meth_table['sample'] == sample]
 
     win_start = int(midpt_min - width/2)
     win_end = win_start + width
@@ -180,8 +180,8 @@ def slide_window(meth_table, phase, width=20, slide=5):
         win_start += slide
         win_end += slide
 
-        meth_count = len(meth_table.loc[(meth_table['phase'] == phase) & (meth_table['loc'] > win_start) & (meth_table['loc'] < win_end) & (meth_table['call'] == 1)])
-        unmeth_count = len(meth_table.loc[(meth_table['phase'] == phase) & (meth_table['loc'] > win_start) & (meth_table['loc'] < win_end) & (meth_table['call'] == -1)])
+        meth_count = len(meth_table.loc[(meth_table['sample'] == sample) & (meth_table['loc'] > win_start) & (meth_table['loc'] < win_end) & (meth_table['call'] == 1)])
+        unmeth_count = len(meth_table.loc[(meth_table['sample'] == sample) & (meth_table['loc'] > win_start) & (meth_table['loc'] < win_end) & (meth_table['call'] == -1)])
 
         midpt = int((win_start+win_end)/2)
 
@@ -278,106 +278,111 @@ def main(args):
     cons_dict = load_falib(cons_fa)
     cons_seq = cons_dict[args.uuid]
 
-    bam_fn = teont_dir + '/' + args.sample + '.' + args.uuid + '.te.bam'
-    meth_fn = teont_dir + '/' + args.sample + '.' + args.uuid + '.te.meth.tsv.gz'
+    meth_table = dd(dict)
+    sample_order = []
 
-    assert os.path.exists(teont_dir)
-    assert os.path.exists(bam_fn)
-    assert os.path.exists(meth_fn)
-    assert args.uuid in teont_table.index
 
-    ins = teont_table.loc[args.uuid]
+    for sample in args.sample.split(','):
 
-    chrom = args.uuid
-    elt_start = 0
-    elt_end = len(cons_seq)
+        sample_order.append(sample)
 
-    fn_prefix = args.sample + '.' + args.uuid
+        bam_fn = teont_dir + '/' + sample + '.' + args.uuid + '.te.bam'
+        meth_fn = teont_dir + '/' + sample + '.' + args.uuid + '.te.meth.tsv.gz'
 
-    h_start, h_end = sorted_unmapped_segments(cons_seq)[0]
-    h_cpg_start = None
-    h_cpg_end = None
+        assert os.path.exists(teont_dir)
+        assert os.path.exists(bam_fn), 'not found: %s' % bam_fn
+        assert os.path.exists(meth_fn), 'not found: %s' % meth_fn
+        assert args.uuid in teont_table.index
 
-    # get relevant genome chunk to tmp tsv
+        ins = teont_table.loc[args.uuid]
 
-    meth_tbx = pysam.Tabixfile(meth_fn)
+        chrom = args.uuid
+        elt_start = 0
+        elt_end = len(cons_seq)
 
-    tmp_methdata = fn_prefix+'.tmp.methdata.tsv'
+        fn_prefix = sample + '.' + args.uuid
 
-    with open(tmp_methdata, 'w') as meth_out:
-        # header
-        with gzip.open(meth_fn, 'rt') as _:
-            for line in _:
-                assert line.startswith('chromosome')
-                meth_out.write(line)
-                break
+        h_start, h_end = sorted_unmapped_segments(cons_seq)[0]
+        h_cpg_start = None
+        h_cpg_end = None
 
-        assert chrom in meth_tbx.contigs
+        # get relevant genome chunk to tmp tsv
 
-        for rec in meth_tbx.fetch(chrom, elt_start, elt_end):
-            meth_out.write(str(rec)+'\n')
+        meth_tbx = pysam.Tabixfile(meth_fn)
 
-    # index by read_name
-    methdata = pd.read_csv(tmp_methdata, sep='\t', header=0, index_col=4)
+        tmp_methdata = fn_prefix+'.tmp.methdata.tsv'
 
-    if not args.keep_tmp_table:
-        os.remove(tmp_methdata)
+        with open(tmp_methdata, 'w') as meth_out:
+            # header
+            with gzip.open(meth_fn, 'rt') as _:
+                for line in _:
+                    assert line.startswith('chromosome')
+                    meth_out.write(line)
+                    break
 
-    # get list of relevant reads (exludes reads not anchored outside interval)
-    reads = get_reads(bam_fn, tag_untagged=args.tag_untagged, ignore_tags=args.ignore_tags)
+            assert chrom in meth_tbx.contigs
 
-    readnames = []
-    for r in reads.keys():
-        if r in methdata.index:
-            readnames.append(r)
+            for rec in meth_tbx.fetch(chrom, elt_start, elt_end):
+                meth_out.write(str(rec)+'\n')
 
-    methdata = methdata.loc[readnames]
+        # index by read_name
+        methdata = pd.read_csv(tmp_methdata, sep='\t', header=0, index_col=4)
 
-    methreads = {}
+        if not args.keep_tmp_table:
+            os.remove(tmp_methdata)
 
-    for index, row in methdata.iterrows():
-        r_start = row['start']
-        r_end   = row['end']
-        llr     = row['log_lik_ratio']
-        seq     = row['sequence']
+        # get list of relevant reads (exludes reads not anchored outside interval)
+        reads = get_reads(bam_fn, tag_untagged=args.tag_untagged, ignore_tags=args.ignore_tags)
 
-        # get per-CG position (nanopolish/calculate_methylation_frequency.py)
-        cg_pos = seq.find("CG")
-        first_cg_pos = cg_pos
-        while cg_pos != -1:
-            cg_start = r_start + cg_pos - first_cg_pos
-            cg_pos = seq.find("CG", cg_pos + 1)
+        readnames = []
+        for r in reads.keys():
+            if r in methdata.index:
+                readnames.append(r)
 
-            cg_elt_start = cg_start - elt_start
+        methdata = methdata.loc[readnames]
 
-            if cg_start >= elt_start and cg_start <= elt_end:
-                #print (cg_start, cg_elt_start, llr, index)
-                if index not in methreads:
-                    methreads[index] = Read(index, cg_elt_start, llr, phase=reads[index], cutoff=float(args.cutoff))
-                else:
-                    methreads[index].add_cpg(cg_elt_start, llr, cutoff=float(args.cutoff))
+        methreads = {}
+
+        for index, row in methdata.iterrows():
+            r_start = row['start']
+            r_end   = row['end']
+            llr     = row['log_lik_ratio']
+            seq     = row['sequence']
+
+            # get per-CG position (nanopolish/calculate_methylation_frequency.py)
+            cg_pos = seq.find("CG")
+            first_cg_pos = cg_pos
+            while cg_pos != -1:
+                cg_start = r_start + cg_pos - first_cg_pos
+                cg_pos = seq.find("CG", cg_pos + 1)
+
+                cg_elt_start = cg_start - elt_start
+
+                if cg_start >= elt_start and cg_start <= elt_end:
+                    #print (cg_start, cg_elt_start, llr, index)
+                    if index not in methreads:
+                        methreads[index] = Read(index, cg_elt_start, llr, phase=reads[index], cutoff=float(args.cutoff))
+                    else:
+                        methreads[index].add_cpg(cg_elt_start, llr, cutoff=float(args.cutoff))
+
+        
+        #meth_table = dd(dict)
+
+        #sample_order = []
+
+        for name, read in methreads.items():
+
+            for loc in read.llrs.keys():
+                uuid = str(uuid4())
+                meth_table[uuid]['loc'] = loc
+                meth_table[uuid]['llr'] = read.llrs[loc]
+                meth_table[uuid]['read'] = name
+                meth_table[uuid]['sample'] = sample
+                meth_table[uuid]['call'] = read.meth_calls[loc]
+
+
 
     # table for plotting
-    meth_table = dd(dict)
-
-    phase_order = []
-
-    for name, read in methreads.items():
-        if read.phase is None:
-            continue
-
-        for loc in read.llrs.keys():
-            uuid = str(uuid4())
-            meth_table[uuid]['loc'] = loc
-            meth_table[uuid]['llr'] = read.llrs[loc]
-            meth_table[uuid]['read'] = name
-            meth_table[uuid]['phase'] = read.phase
-            meth_table[uuid]['call'] = read.meth_calls[loc]
-
-            if read.phase not in phase_order:
-                phase_order.append(read.phase)
-
-
     meth_table = pd.DataFrame.from_dict(meth_table).T
     meth_table['loc'] = pd.to_numeric(meth_table['loc'])
     meth_table['llr'] = pd.to_numeric(meth_table['llr'])
@@ -549,11 +554,11 @@ def main(args):
     ax3.axhline(y=0, c='#bbbbbb', linestyle='--',lw=1)
     ax3.axhline(y=0-float(args.cutoff), c='k', linestyle='--',lw=1)
 
-    ax3 = sns.lineplot(x='loc', y='llr', hue='phase', data=meth_table)
+    ax3 = sns.lineplot(x='loc', y='llr', hue='sample', data=meth_table)
 
-    phase_color = {}
-    for i, phase in enumerate(phase_order):
-        phase_color[phase] = sns.color_palette(n_colors=len(phase_order))[i]
+    sample_color = {}
+    for i, sample in enumerate(sample_order):
+        sample_color[sample] = sns.color_palette(n_colors=len(sample_order))[i]
 
     ax3.set_xlim(ax1.get_xlim())
 
@@ -561,9 +566,9 @@ def main(args):
 
     ax5 = plt.subplot(gs[3])
 
-    for phase in phase_order:
-        windowed_methfrac = slide_window(meth_table, phase, width=int(args.slidingwindowsize), slide=int(args.slidingwindowstep))
-        ax5.plot(list(windowed_methfrac.keys()), list(windowed_methfrac.values()), marker='', color=phase_color[phase])
+    for sample in sample_order:
+        windowed_methfrac = slide_window(meth_table, sample, width=int(args.slidingwindowsize), slide=int(args.slidingwindowstep))
+        ax5.plot(list(windowed_methfrac.keys()), list(windowed_methfrac.values()), marker='', color=sample_color[sample])
 
     ax5.set_xlim(ax1.get_xlim())
     ax5.set_ylim((-0.05,1.05))
@@ -574,6 +579,8 @@ def main(args):
 
     if args.svg:
         imgtype = 'svg'
+
+    fn_prefix = '_'.join(args.sample.split(',')) + '.' + args.uuid
 
     if args.ignore_tags:
         plt.savefig('%s.unphased.meth.%s' % (fn_prefix, imgtype), bbox_inches='tight')

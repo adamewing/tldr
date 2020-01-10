@@ -877,13 +877,26 @@ def minimap2_breakpoint(ref, cons, side):
 
 def minimap2_extend(ref, cons):
 
+    # mask the repetitive part of the consensus
+
+    cons_masked = []
+
+    for b in cons:
+        if b.islower():
+            b = 'N'
+
+        cons_masked.append(b)
+
+    cons_masked = ''.join(cons_masked)
+
+
     tmp_ref = str(uuid4()) + '.fa'
     with open(tmp_ref, 'w') as out:
         out.write('>ref\n%s\n' % ref.upper())
 
     tmp_cons = str(uuid4()) + '.fa'
     with open(tmp_cons, 'w') as out:
-        out.write('>cons\n%s\n' % cons.upper())
+        out.write('>cons\n%s\n' % cons_masked)
 
     FNULL = open(os.devnull, 'w')
 
@@ -917,7 +930,6 @@ def minimap2_extend(ref, cons):
                 elif map_ref_end < r:
                     map_ref_end = r
                     map_cons_end = q
-
 
     os.remove(tmp_ref)
     os.remove(tmp_cons)
