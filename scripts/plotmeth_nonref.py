@@ -302,7 +302,7 @@ def main(args):
 
         fn_prefix = '.'.join((args.sample, args.uuid, ins['Chrom'], str(ins['Start']), ins['Subfamily']))
 
-        h_start, h_end = sorted_unmapped_segments(cons_seq)[0]
+        h_start, h_end = sorted_unmapped_segments(cons_seq)[0]  # defines TE start / end positions in contig
         h_cpg_start = None
         h_cpg_end = None
 
@@ -331,7 +331,7 @@ def main(args):
         if not args.keep_tmp_table:
             os.remove(tmp_methdata)
 
-        # get list of relevant reads (exludes reads not anchored outside interval)
+        # get list of relevant reads
         reads = get_reads(bam_fn, tag_untagged=args.tag_untagged, ignore_tags=args.ignore_tags)
 
         readnames = []
@@ -476,6 +476,29 @@ def main(args):
     ax1 = plt.subplot(gs[1])
     ax2 = ax1.twiny()
 
+    # set window size a close to window as possible (nearest CpG locations)
+
+    view_orig_start = 0
+    view_orig_end = 0
+    view_cpg_start = 0
+    view_cpg_end = 0
+
+    for oc in coord_to_cpg.keys():
+        if oc > h_start - int(args.windowsize):
+            view_orig_start = oc
+            break
+
+    for oi, oc in enumerate(coord_to_cpg.keys()):
+        if oc > h_end + int(args.windowsize):
+            view_orig_end = list(coord_to_cpg.keys())[oi-1]
+            break
+
+    view_cpg_start = coord_to_cpg[view_orig_start]
+    view_cpg_end = coord_to_cpg[view_orig_end]
+
+    ax2.set_xlim(view_orig_start, view_orig_end)
+    ax1.set_xlim(view_cpg_start, view_cpg_end)
+
     ax1.set_ylim(0,10)
     ax1.set_yticklabels([])
 
@@ -598,6 +621,7 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--sample', required=True)
     parser.add_argument('-c', '--cutoff', default=2.5, help='llr cutoff (absolute value), default=2.5')
     parser.add_argument('-w', '--windowsize', required=True)
+    #parser.add_argument('-m', '--minreads', default=1)
     parser.add_argument('--slidingwindowsize', default=10, help='size of sliding window for smoothed plot (default=10)')
     parser.add_argument('--slidingwindowstep', default=2, help='size of sliding window for smoothed plot (default=2)')
     parser.add_argument('--methcall_ymax', default=None)
