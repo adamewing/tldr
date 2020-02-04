@@ -29,6 +29,8 @@ from matplotlib.patches import ConnectionPatch
 from uuid import uuid4
 import gzip
 
+from statsmodels.nonparametric.smoothers_lowess import lowess
+
 
 class Gene:
     def __init__(self, ensg, name):
@@ -300,7 +302,7 @@ def main(args):
         elt_start = 0
         elt_end = len(cons_seq)
 
-        fn_prefix = '.'.join((args.sample, args.uuid, ins['Chrom'], str(ins['Start']), ins['Subfamily']))
+        fn_prefix = '.'.join(('_'.join(args.sample.split(',')), args.uuid, ins['Chrom'], str(ins['Start']), ins['Subfamily']))
 
         h_start, h_end = sorted_unmapped_segments(cons_seq)[0]  # defines TE start / end positions in contig
         h_cpg_start = None
@@ -592,7 +594,15 @@ def main(args):
 
     for sample in sample_order:
         windowed_methfrac = slide_window(meth_table, sample, width=int(args.slidingwindowsize), slide=int(args.slidingwindowstep))
+        mf_x = np.asarray(list(windowed_methfrac.keys()))
+        mf_y = np.asarray(list(windowed_methfrac.values()))
+
+        #lowess_smoothed = lowess(mf_y, mf_x, is_sorted=True, return_sorted=False)
+        #print(lowess_smoothed)
+
         ax5.plot(list(windowed_methfrac.keys()), list(windowed_methfrac.values()), marker='', color=sample_color[sample])
+        #ax5.plot(list(windowed_methfrac.keys()), lowess_smoothed, marker='', color=sample_color[sample])
+
 
     ax5.set_xlim(ax1.get_xlim())
     ax5.set_ylim((-0.05,1.05))
@@ -604,7 +614,7 @@ def main(args):
     if args.svg:
         imgtype = 'svg'
 
-    fn_prefix = '_'.join(args.sample.split(',')) + '.' + args.uuid
+    #fn_prefix = '_'.join(args.sample.split(',')) + '.' + args.uuid
 
     if args.ignore_tags:
         plt.savefig('%s.unphased.meth.%s' % (fn_prefix, imgtype), bbox_inches='tight')
