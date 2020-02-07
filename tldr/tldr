@@ -161,7 +161,15 @@ class InsRead:
 
     def te_info(self, te):
         self.te = te
-        self.te_fam, self.te_subfam = te.subfamily().split(':')
+
+        subfam = te.subfamily()
+
+        if ':' in subfam:
+            self.te_fam, self.te_subfam = subfam.split(':')
+        else:
+            self.te_fam    = subfam
+            self.te_subfam = subfam
+
         self.te_elt_start   = te.min_qry_coord()
         self.te_elt_end     = te.max_qry_coord()
         self.te_r_seq_start = te.min_tgt_coord()
@@ -1182,7 +1190,12 @@ def process_cluster(cluster, inslib, outbase, args):
                     cluster.reset_major_family, cluster.reset_major_subfam = 'NA', 'NA'
 
                 else:
-                    cluster.reset_major_family, cluster.reset_major_subfam = cluster.cons_te_align.subfamily().split(':')
+                    subfam = cluster.cons_te_align.subfamily()
+                    if ':' in subfam:
+                        cluster.reset_major_family, cluster.reset_major_subfam = subfam.split(':')
+                    else:
+                        cluster.reset_major_family = subfam
+                        cluster.reset_major_subfam = subfam
 
                 # handle case where te alignment is split across > 1 unaligned segment
                 if cluster.cons_te_align is not None and len(cluster.sorted_unmapped_segments()) > 1:
@@ -1198,7 +1211,12 @@ def process_cluster(cluster, inslib, outbase, args):
                             cluster.reset_major_family, cluster.reset_major_subfam = 'NA', 'NA'
 
                         else:
-                            cluster.reset_major_family, cluster.reset_major_subfam = cluster.cons_te_align.subfamily().split(':')
+                            subfam = cluster.cons_te_align.subfamily()
+                            if ':' in subfam:
+                                cluster.reset_major_family, cluster.reset_major_subfam = subfam.split(':')
+                            else:
+                                cluster.reset_major_family = subfam
+                                cluster.reset_major_subfam = subfam
 
                 # clean up breakpoints
                 bp_left, bp_right = cluster.sorted_unmapped_segments()[0]
@@ -1227,9 +1245,13 @@ def process_cluster(cluster, inslib, outbase, args):
                             cluster.reset_major_family, cluster.reset_major_subfam = 'NA', 'NA'
 
                         else:
-                            cluster.reset_major_family, cluster.reset_major_subfam = cluster.cons_te_align.subfamily().split(':')
-
-
+                            subfam = cluster.cons_te_align.subfamily()
+                            if ':' in subfam:
+                                cluster.reset_major_family, cluster.reset_major_subfam = subfam.split(':')
+                            else:
+                                cluster.reset_major_family = subfam
+                                cluster.reset_major_subfam = subfam
+                        
                     # index from start of reference segment
                     cluster.breakpoints = sorted([(int(cluster.breakpoints[0]) - int(args.flanksize)) + break_left[1], 
                                                   (int(cluster.breakpoints[0]) - int(args.flanksize)) + break_right[1]])
@@ -1253,8 +1275,12 @@ def process_cluster(cluster, inslib, outbase, args):
                             cluster.reset_major_family, cluster.reset_major_subfam = 'NA', 'NA'
 
                         else:
-                            cluster.reset_major_family, cluster.reset_major_subfam = cluster.cons_te_align.subfamily().split(':')
-
+                            subfam = cluster.cons_te_align.subfamily()
+                            if ':' in subfam:
+                                cluster.reset_major_family, cluster.reset_major_subfam = subfam.split(':')
+                            else:
+                                cluster.reset_major_family = subfam
+                                cluster.reset_major_subfam = subfam
 
                 if args.detail_output:
                     out_cons = cluster.cons
