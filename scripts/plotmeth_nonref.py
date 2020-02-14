@@ -167,7 +167,7 @@ def get_reads(fn, min_mapq=10, tag_untagged=False, ignore_tags=False):
     return reads
 
 
-def slide_window(meth_table, sample, width=20, slide=5):
+def slide_window(meth_table, sample, width=20, slide=2):
     midpt_min = min(meth_table['loc'])
     midpt_max = max(meth_table['loc'])
 
@@ -177,6 +177,7 @@ def slide_window(meth_table, sample, width=20, slide=5):
     win_end = win_start + width
 
     meth_frac = {}
+    meth_n = {}
 
     while int((win_start+win_end)/2) < midpt_max:
         win_start += slide
@@ -189,8 +190,61 @@ def slide_window(meth_table, sample, width=20, slide=5):
 
         if meth_count + unmeth_count > 0:
             meth_frac[midpt] = meth_count/(meth_count+unmeth_count)
+            meth_n[midpt] = meth_count+unmeth_count
 
-    return meth_frac
+    return meth_frac, meth_n
+
+
+def smooth(x, window_len=8, window='hanning'):
+    ''' modified from scipy cookbook: https://scipy-cookbook.readthedocs.io/items/SignalSmooth.html '''
+
+    assert window_len % 2 == 0, '--smoothwindowsize must be an even number'
+    assert x.ndim == 1
+    assert x.size > window_len
+
+    if window_len<3:
+        return x
+
+    assert window in ['flat', 'hanning', 'hamming', 'bartlett', 'blackman']
+
+    s=np.r_[x[window_len-1:0:-1],x,x[-2:-window_len-1:-1]]
+    
+    if window == 'flat': #moving average
+        w=np.ones(window_len,'d')
+    else:
+        w=eval('np.'+window+'(window_len)')
+
+    y=np.convolve(w/w.sum(),s,mode='valid')
+
+    return y[(int(window_len/2)-1):-(int(window_len/2))]
+
+
+def mask_methfrac(data, cutoff=20):
+    data = np.asarray(data)
+    data = data > int(cutoff)
+
+    segs = []
+
+    in_seg = False
+    seg_start = 0
+
+    for i in range(len(data)):
+        if data[i]:
+            if in_seg:
+                segs.append(list(range(seg_start, i)))
+
+            in_seg = False
+
+        else:
+            if not in_seg:
+                seg_start = i
+
+            in_seg = True
+
+    if in_seg:
+        segs.append(list(range(seg_start, len(data))))
+
+    return segs
 
 
 def build_genes(gtf, chrom, start, end):
@@ -588,20 +642,28 @@ def main(args):
 
     ax3.set_xlim(ax1.get_xlim())
 
-    # sliding window plot
+    # meth frac plot
 
     ax5 = plt.subplot(gs[3])
 
     for sample in sample_order:
-        windowed_methfrac = slide_window(meth_table, sample, width=int(args.slidingwindowsize), slide=int(args.slidingwindowstep))
-        mf_x = np.asarray(list(windowed_methfrac.keys()))
-        mf_y = np.asarray(list(windowed_methfrac.values()))
+        windowed_methfrac, meth_n = slide_window(meth_table, sample, width=int(args.slidingwindowsize), slide=int(args.slidingwindowstep))
+        
+        smoothed_methfrac = smooth(np.asarray(list(windowed_methfrac.values())), window_len=int(args.smoothwindowsize))
 
-        #lowess_smoothed = lowess(mf_y, mf_x, is_sorted=True, return_sorted=False)
-        #print(lowess_smoothed)
+        #print(sample, ','.join(map(str, list(meth_n.values()))))
 
-        ax5.plot(list(windowed_methfrac.keys()), list(windowed_methfrac.values()), marker='', color=sample_color[sample])
-        #ax5.plot(list(windowed_methfrac.keys()), lowess_smoothed, marker='', color=sample_color[sample])
+        masked_segs = mask_methfrac(list(meth_n.values()))
+        #print(sample, masked_segs)
+
+        ax5.plot(list(windowed_methfrac.keys()), smoothed_methfrac, marker='', color=sample_color[sample], zorder=1)
+
+        for seg in masked_segs:
+            if len(seg) > 2:
+                mf_seg = np.asarray(smoothed_methfrac)[seg]
+                pos_seg = np.asarray(list(windowed_methfrac.keys()))[seg]
+            
+                ax5.plot(pos_seg, mf_seg, marker='', color='#ffffff', zorder=2)
 
 
     ax5.set_xlim(ax1.get_xlim())
@@ -613,8 +675,6 @@ def main(args):
 
     if args.svg:
         imgtype = 'svg'
-
-    #fn_prefix = '_'.join(args.sample.split(',')) + '.' + args.uuid
 
     if args.ignore_tags:
         plt.savefig('%s.unphased.meth.%s' % (fn_prefix, imgtype), bbox_inches='tight')
@@ -631,9 +691,9 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--sample', required=True)
     parser.add_argument('-c', '--cutoff', default=2.5, help='llr cutoff (absolute value), default=2.5')
     parser.add_argument('-w', '--windowsize', required=True)
-    #parser.add_argument('-m', '--minreads', default=1)
-    parser.add_argument('--slidingwindowsize', default=10, help='size of sliding window for smoothed plot (default=10)')
-    parser.add_argument('--slidingwindowstep', default=2, help='size of sliding window for smoothed plot (default=2)')
+    parser.add_argument('--slidingwindowsize', default=20, help='size of sliding window for meth frac (default=20)')
+    parser.add_argument('--slidingwindowstep', default=2, help='step size for meth frac (default=2)')
+    parser.add_argument('--smoothwindowsize', default=8, help='size of window for smoothing (default=8)')
     parser.add_argument('--methcall_ymax', default=None)
     parser.add_argument('--topspacing', default=10, help='spacing between links in top panel (default=10)')
     parser.add_argument('--genes', default=None, help='genes of interest (comma delimited)')
