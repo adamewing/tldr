@@ -646,6 +646,8 @@ def main(args):
 
     ax5 = plt.subplot(gs[3])
 
+    order_stack = 1
+
     for sample in sample_order:
         windowed_methfrac, meth_n = slide_window(meth_table, sample, width=int(args.slidingwindowsize), slide=int(args.slidingwindowstep))
         
@@ -653,17 +655,20 @@ def main(args):
 
         #print(sample, ','.join(map(str, list(meth_n.values()))))
 
-        masked_segs = mask_methfrac(list(meth_n.values()))
+        masked_segs = mask_methfrac(list(meth_n.values()), cutoff=args.maskcutoff)
         #print(sample, masked_segs)
 
-        ax5.plot(list(windowed_methfrac.keys()), smoothed_methfrac, marker='', color=sample_color[sample], zorder=1)
+        ax5.plot(list(windowed_methfrac.keys()), smoothed_methfrac, marker='', lw=4, color=sample_color[sample], zorder=order_stack)
+        order_stack += 1
 
         for seg in masked_segs:
             if len(seg) > 2:
                 mf_seg = np.asarray(smoothed_methfrac)[seg]
                 pos_seg = np.asarray(list(windowed_methfrac.keys()))[seg]
             
-                ax5.plot(pos_seg, mf_seg, marker='', color='#ffffff', zorder=2)
+                ax5.plot(pos_seg, mf_seg, marker='', lw=4, color='#ffffff', alpha=0.8, zorder=order_stack)
+
+                order_stack += 1
 
 
     ax5.set_xlim(ax1.get_xlim())
@@ -691,6 +696,7 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--sample', required=True)
     parser.add_argument('-c', '--cutoff', default=2.5, help='llr cutoff (absolute value), default=2.5')
     parser.add_argument('-w', '--windowsize', required=True)
+    parser.add_argument('-m', '--maskcutoff', default=20, help='windowed read count masking cutoff (default=20)')
     parser.add_argument('--slidingwindowsize', default=20, help='size of sliding window for meth frac (default=20)')
     parser.add_argument('--slidingwindowstep', default=2, help='step size for meth frac (default=2)')
     parser.add_argument('--smoothwindowsize', default=8, help='size of window for smoothing (default=8)')
