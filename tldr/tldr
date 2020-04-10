@@ -713,7 +713,7 @@ def mafft(in_fn):
     return out_fn
 
 
-def te_align(te_fa, refseq, minmatch=80.0, te_fa_is_seq=False, max_segs=3, max_homopol=200):
+def te_align(te_fa, refseq, minmatch=80.0, te_fa_is_seq=False, max_segs=3):
     if has_homopol(refseq, 200):
         return None
 
@@ -1308,7 +1308,7 @@ def process_cluster(cluster, inslib, outbase, args):
 
                         per_bam_fq = '%s/%s.%s.cluster.fq' % (outbase, sample, cluster.uuid)
 
-                        usereads = [read.r_name for read in cluster.reads if read.useable]
+                        #usereads = [read.r_name for read in cluster.reads if read.useable]
                         
                         with open(per_bam_fq, 'w') as out_fq:
                             bam = pysam.AlignmentFile(bampath)
@@ -1732,8 +1732,8 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--chroms', default=None, help='limit to chromsomes in file')
     parser.add_argument('--max_te_len', default=10000, help='maximum insertion size (default = 10000)')
     parser.add_argument('--min_te_len', default=200, help='minimum insertion size (default = 200)')
-    parser.add_argument('--min_alt_frac', default=0.5, help='parameter for base cahnges in consensus cleanup (defult=0.5)')
-    parser.add_argument('--min_alt_depth', default=3, help='parameter for base cahnges in consensus cleanup (defult=3)')
+    parser.add_argument('--min_alt_frac', default=0.5, help='parameter for base changes in consensus cleanup (defult=0.5)')
+    parser.add_argument('--min_alt_depth', default=3, help='parameter for base changes in consensus cleanup (defult=3)')
     parser.add_argument('--min_total_depth_frac', default=0.1, help='parameter for base cahnges in consensus cleanup (defult=0.25)')
     parser.add_argument('--wiggle', default=200, help='interval padding for breakpoint search (default = 50)')
     parser.add_argument('--flanksize', default=500, help='flank size for read trimming (default = 500)')
