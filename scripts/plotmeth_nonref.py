@@ -351,6 +351,7 @@ def main(args):
         assert args.uuid in teont_table.index
 
         ins = teont_table.loc[args.uuid]
+        elt_strand = ins['Strand']
 
         chrom = args.uuid
         elt_start = 0
@@ -359,8 +360,26 @@ def main(args):
         fn_prefix = '.'.join(('_'.join(args.sample.split(',')), args.uuid, ins['Chrom'], str(ins['Start']), ins['Subfamily']))
 
         h_start, h_end = sorted_unmapped_segments(cons_seq)[0]  # defines TE start / end positions in contig
-        h_cpg_start = None
-        h_cpg_end = None
+        h_start = [h_start]
+        h_end = [h_end]
+
+        if args.highlight_utr:
+            h_s = h_start[0]
+            h_e = h_end[0]
+
+            h_len = int(args.highlight_utr)
+            if elt_strand == '+':
+                h_start = [h_s, h_s+h_len]
+                h_end = [h_s+h_len, h_e]
+
+            if elt_strand == '-':
+                h_start = [h_e-h_len, h_s]
+                h_end = [h_e, h_e-h_len]
+
+        h_cpg_start = []
+        h_cpg_end = []
+
+        h_colors = ['#3080ff','#ff4500']
 
         # get relevant genome chunk to tmp tsv
 
@@ -451,9 +470,9 @@ def main(args):
     for orig_loc, new_loc in zip(meth_table['orig_loc'], meth_table['loc']):
         coord_to_cpg[orig_loc] = new_loc
 
-
-    h_cpg_start = coord_to_cpg[min(meth_table['orig_loc'], key=lambda x:abs(x-h_start))]
-    h_cpg_end = coord_to_cpg[min(meth_table['orig_loc'], key=lambda x:abs(x-h_end))]
+    for i in range(len(h_start)):
+        h_cpg_start.append(coord_to_cpg[min(meth_table['orig_loc'], key=lambda x:abs(x-h_start[i]))])
+        h_cpg_end.append(coord_to_cpg[min(meth_table['orig_loc'], key=lambda x:abs(x-h_end[i]))])
 
     fig = plt.figure()
 
@@ -464,6 +483,12 @@ def main(args):
 
     gs = gridspec.GridSpec(4,1,height_ratios=gs_ratio)
 
+    ctg_start, ctg_end = sorted_unmapped_segments(cons_seq)[0]
+    view_orig_start = sorted(list(coord_to_cpg.keys()))[0]
+    view_orig_end = sorted(list(coord_to_cpg.keys()))[-1]
+
+    g_window_start = ins['Start']-(ctg_start-view_orig_start)
+    g_window_end = ins['End']+(view_orig_end-ctg_end)
 
     # plot genes
     ax0 = plt.subplot(gs[0])
@@ -480,7 +505,7 @@ def main(args):
 
     genes = []
     if gtf is not None:
-        genes = build_genes(gtf, ins['Chrom'], int(ins['Start'])-int(args.windowsize), int(ins['End'])+int(args.windowsize))
+        genes = build_genes(gtf, ins['Chrom'], g_window_start, g_window_end)
 
     exon_patches = []
     tx_lines = []
@@ -492,7 +517,7 @@ def main(args):
 
     i = 0
     for ensg in genes:
-        window_offset = int(ins['Start'])-int(args.windowsize)
+        window_offset = g_window_start
 
         if genes_of_interest:
             if genes[ensg].name not in genes_of_interest:
@@ -532,23 +557,6 @@ def main(args):
     ax1 = plt.subplot(gs[1])
     ax2 = ax1.twiny()
 
-    # set window size a close to window as possible (nearest CpG locations)
-
-    view_orig_start = 0
-    view_orig_end = 0
-    view_cpg_start = 0
-    view_cpg_end = 0
-
-    for oc in coord_to_cpg.keys():
-        if oc > h_start - int(args.windowsize):
-            view_orig_start = oc
-            break
-
-    for oi, oc in enumerate(coord_to_cpg.keys()):
-        if oc > h_end + int(args.windowsize):
-            view_orig_end = list(coord_to_cpg.keys())[oi-1]
-            break
-
     view_cpg_start = coord_to_cpg[view_orig_start]
     view_cpg_end = coord_to_cpg[view_orig_end]
 
@@ -577,35 +585,13 @@ def main(args):
     ax1.vlines(x1, 0, 1, color='#777777', zorder=1)
     ax2.vlines(x2, 9, 10, color='#777777', zorder=1)
 
-
-    orig_highlight_box = matplotlib.patches.Rectangle((h_start,9), h_end-h_start, 1.0, lw=1, edgecolor='#777777', facecolor='#a8caff', zorder=2)
-    cpg_highlight_box = matplotlib.patches.Rectangle((h_cpg_start,0), h_cpg_end-h_cpg_start, 1.0, lw=1, edgecolor='#777777', facecolor='#a8caff', zorder=3)
-
-    # arrows
-
-    orig_arr_x = h_start
-    orig_arr_y = 9.5
-    orig_arr_dx = (h_end-h_start) - ((h_end-h_start)*0.03)
-    orig_arr_dy = 0
-
-    cpg_arr_x = h_cpg_start
-    cpg_arr_y = 0.5
-    cpg_arr_dx = (h_cpg_end-h_cpg_start) - ((h_cpg_end-h_cpg_start)*0.03)
-    cpg_arr_dy = 0
-
-    if ins['Strand'] == '-':
-        orig_arr_x = h_end
-        orig_arr_dx = 0 - orig_arr_dx
-
-        cpg_arr_x = h_cpg_end
-        cpg_arr_dx = 0- cpg_arr_dx
-
-    orig_arrow = ax2.arrow(orig_arr_x, orig_arr_y, orig_arr_dx, orig_arr_dy, head_width=1, head_length=(h_end-h_start)*0.03, zorder=4)
-    cpg_arrow = ax1.arrow(cpg_arr_x, cpg_arr_y, cpg_arr_dx, cpg_arr_dy, head_width=1, head_length=(h_cpg_end-h_cpg_start)*0.03, zorder=4)
+    for i in range(len(h_start)):
+        orig_highlight_box = matplotlib.patches.Rectangle((h_start[i],9), h_end[i]-h_start[i], 1.0, lw=1, edgecolor='#777777', facecolor=h_colors[i], zorder=2)
+        cpg_highlight_box = matplotlib.patches.Rectangle((h_cpg_start[i],0), h_cpg_end[i]-h_cpg_start[i], 1.0, lw=1, edgecolor='#777777', facecolor=h_colors[i], zorder=3)
 
 
-    ax2.add_patch(orig_highlight_box)
-    ax1.add_patch(cpg_highlight_box)
+        ax2.add_patch(orig_highlight_box)
+        ax1.add_patch(cpg_highlight_box)
 
     for x1_x, x2_x in zip(x1, x2):
         link_end1 = (x1_x, 1)
@@ -613,8 +599,9 @@ def main(args):
 
         l_col = '#777777'
 
-        if x2_x >= h_start and x2_x <= h_end:
-            l_col = '#3080ff'
+        for i in range(len(h_start)):
+            if x2_x >= h_start[i] and x2_x <= h_end[i]:
+                l_col = h_colors[i]
 
         con = ConnectionPatch(xyA=link_end1, xyB=link_end2, coordsA="data", coordsB="data", axesA=ax1, axesB=ax2, color=l_col)
         ax2.add_artist(con)
@@ -695,7 +682,6 @@ if __name__ == '__main__':
     parser.add_argument('-u', '--uuid', required=True, help='target UUID')
     parser.add_argument('-s', '--sample', required=True)
     parser.add_argument('-c', '--cutoff', default=2.5, help='llr cutoff (absolute value), default=2.5')
-    parser.add_argument('-w', '--windowsize', required=True)
     parser.add_argument('-m', '--maskcutoff', default=20, help='windowed read count masking cutoff (default=20)')
     parser.add_argument('--slidingwindowsize', default=20, help='size of sliding window for meth frac (default=20)')
     parser.add_argument('--slidingwindowstep', default=2, help='step size for meth frac (default=2)')
@@ -709,6 +695,7 @@ if __name__ == '__main__':
     parser.add_argument('--tag_untagged', action='store_true', default=False)
     parser.add_argument('--skip_callplot', action='store_true', default=False)
     parser.add_argument('--skip_wiggle', action='store_true', default=False)
+    parser.add_argument('--highlight_utr', default=None, help='highlight n bases of 5-prime utr')
     parser.add_argument('--svg', action='store_true', default=False)
 
 
