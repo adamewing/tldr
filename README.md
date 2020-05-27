@@ -59,10 +59,10 @@ python setup.py install
 
 Synopsis (minimal input requirements), assuming reads aligned to hg38 using minimap2:
 ```
-tldr -b aligned_reads.bam -e /path/to/tldr/ref/teref.human.fa -r /path/to/minimap2-indexed/reference/genome.fasta
+tldr -b aligned_reads.bam -e /path/to/tldr/ref/teref.human.fa -r /path/to/minimap2-indexed/reference/genome.fasta --color_consensus
 ```
 
-## Additional options
+## Command-line Options
 
 ### multiple .bam files
 Multiple .bam files can provided in a comma-delimited list.
@@ -101,8 +101,11 @@ Number of threads to give each mafft job (consensus building)
 This will annotate the consensus sequence with ANSI escape characters that yield coloured text on the command-line:
 red = TSD, blue = TE insertion sequence, yellow = non-TE insertion sequence
 
-### --detail_out
-Creates a directory (name is the output base name) with extended consensus sequences, per-insertion read mapping information and per-insertion .bam files
+### --detail_output
+Creates a directory (name is the output base name) with extended consensus sequences, per-insertion read mapping information and per-insertion .bam files. Required for mCpG analysis.
+
+### --extend_consensus
+If --detail_output option is enabled, extend output per-sample consensus by n bases (default 0). This is useful in the analysis of CpG methylation to add context on either end of the insertion.
 
 ## Output
 
@@ -143,6 +146,24 @@ Upper case bases = reference genome sequence, lower case bases = insertion seque
 
 ### Filter
 Annotate whether an insertion call is problematic; "PASS" otherwise (similar to VCF filter column).
+
+## Methylation
+
+Non-reference methylation can be assessed through the use of scripts located in the `scripts/` directory:
+
+| script                | description |
+|-----------------------|-------------|
+| tldr_callmeth.sh      | Must be run from within the diretory where `nanopolish index` was run to index a .fastq file against a set of ONT .fast5 files. Takes as input a .fastq (indexed via `nanopolish index`), an output directory created via the `--detail_output` option, a UUID and a sample name. Creates a tabix indexed table from the output of nanopolish call-methylation on the sample+uuid combination. Can be automated via xargs or GNU parallel. |
+| tablemeth_nonref.py   | Creates a table with per-element mCpG summary data given a tldr output table and the directory created by `--detail_output`. Only considers element + sample combinations from the tldr table where `tldr_callmeth.sh` has been run. Requires pysam, pandas, numpy, and scipy. |
+| plotmeth_nonref.py    | Makes a plot of a TE (requires running `tldr_callmeth.sh` first) plus the surrounding region if `--extend_consensus` is specified. Tracks include translation to CpG space, raw log-likelihood, and smoothed methylation fraction. Requires pysam, pandas, numpy, scipy, matplotlib, and seaborn. |
+
+## Reference TEs
+
+See https://github.com/adamewing/te-nanopore-tools
+
+## References
+
+Adam D Ewing, Nathan Smits, Francisco J Sanchez-Luque, Jamila Faivre, Paul M Brennan, Seth W Cheetham, Geoffrey J Faulkner. Nanopore sequencing enables comprehensive transposable element epigenomic profiling. bioRxiv 2020.05.24.113068; doi: https://doi.org/10.1101/2020.05.24.113068
 
 ## Getting help
 
