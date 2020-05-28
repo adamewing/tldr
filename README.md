@@ -1,3 +1,5 @@
+[![DOI](https://zenodo.org/badge/205993555.svg)](https://zenodo.org/badge/latestdoi/205993555)
+
 ## tldr
 
 *Transposons from Long Dirty Reads*
