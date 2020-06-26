@@ -2,7 +2,7 @@
 
 ## tldr
 
-*Transposons from Long Dirty Reads*
+*Transposons from Long DNA Reads*
 
 # Installation
 
