@@ -1294,6 +1294,9 @@ def process_cluster(cluster, inslib, outbase, args):
                         out_start -= ext_bases
                         out_end += ext_bases
 
+                        if out_start < 0:
+                            out_start = 0
+
                         ext_ref = ref.fetch(cluster.chrom(), out_start, out_end)
                         out_cons = minimap2_extend(ext_ref, cluster.cons)
 
