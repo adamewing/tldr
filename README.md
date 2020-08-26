@@ -61,7 +61,7 @@ python setup.py install
 
 Synopsis (minimal input requirements), assuming reads aligned to hg38 using minimap2:
 ```
-tldr -b aligned_reads.bam -e /path/to/tldr/ref/teref.human.fa -r /path/to/minimap2-indexed/reference/genome.fasta --color_consensus
+tldr -b aligned_reads.bam -e /path/to/tldr/ref/teref.ont.human.fa -r /path/to/minimap2-indexed/reference/genome.fasta --color_consensus
 ```
 
 ## Command-line Options
