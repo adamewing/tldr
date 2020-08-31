@@ -562,7 +562,10 @@ class InsCluster:
         o_std   = np.std(list(z.values()))
 
         for name, s in z.items():
-            z[name] = abs(s-o_mean)/o_std
+            if o_std == 0:
+                z[name] = 0
+            else:
+                z[name] = abs(s-o_mean)/o_std
 
         return z
 
@@ -1169,13 +1172,22 @@ def process_cluster(cluster, inslib, outbase, args):
 
                 cluster.breakpoints = sorted(map(round, means))
 
+            logger.debug('%s breakpoints: %s' % (cluster.uuid, cluster.breakpoints))
+
             dump_fa = cluster.dump_fasta(te_fam=major_family)
             dump_fq = cluster.dump_fastq(te_fam=major_family)
             msa_fa = mafft(dump_fa)
             msa = MSA(msa_fa)
 
-            cluster.cons = msa.consensus(gapped=False)
+            if len(cluster) == 1:
+                cluster.cons = cluster.reads[0].r_seq_trimmed
+
+            else:
+                cluster.cons = msa.consensus(gapped=False)
+                
             cluster.cons = minimap2_pileup(cluster, dump_fq, outbase, min_alt_depth=int(args.min_alt_depth), min_alt_frac=float(args.min_alt_frac), min_total_depth_frac=float(args.min_total_depth_frac))
+
+            logger.debug("%s cons: %s" % (cluster.uuid, cluster.cons))
 
             if te_type in inslib:
                 samples = list(set([read.bamname for read in cluster.reads if read.useable]))
@@ -1748,7 +1760,7 @@ if __name__ == '__main__':
     parser.add_argument('--min_te_len', default=200, help='minimum insertion size (default = 200)')
     parser.add_argument('--min_alt_frac', default=0.5, help='parameter for base changes in consensus cleanup (defult=0.5)')
     parser.add_argument('--min_alt_depth', default=3, help='parameter for base changes in consensus cleanup (defult=3)')
-    parser.add_argument('--min_total_depth_frac', default=0.1, help='parameter for base cahnges in consensus cleanup (defult=0.25)')
+    parser.add_argument('--min_total_depth_frac', default=0.1, help='parameter for base changes in consensus cleanup (defult=0.25)')
     parser.add_argument('--wiggle', default=200, help='interval padding for breakpoint search (default = 50)')
     parser.add_argument('--flanksize', default=500, help='flank size for read trimming (default = 500)')
     parser.add_argument('-n', '--nonref', help='known nonref tabix', default=None)
