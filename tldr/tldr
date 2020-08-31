@@ -1172,22 +1172,18 @@ def process_cluster(cluster, inslib, outbase, args):
 
                 cluster.breakpoints = sorted(map(round, means))
 
-            logger.debug('%s breakpoints: %s' % (cluster.uuid, cluster.breakpoints))
-
             dump_fa = cluster.dump_fasta(te_fam=major_family)
             dump_fq = cluster.dump_fastq(te_fam=major_family)
             msa_fa = mafft(dump_fa)
             msa = MSA(msa_fa)
 
-            if len(cluster) == 1:
+            if len(cluster) == 1 and int(args.minreads) == 1:
                 cluster.cons = cluster.reads[0].r_seq_trimmed
 
             else:
                 cluster.cons = msa.consensus(gapped=False)
-                
-            cluster.cons = minimap2_pileup(cluster, dump_fq, outbase, min_alt_depth=int(args.min_alt_depth), min_alt_frac=float(args.min_alt_frac), min_total_depth_frac=float(args.min_total_depth_frac))
 
-            logger.debug("%s cons: %s" % (cluster.uuid, cluster.cons))
+            cluster.cons = minimap2_pileup(cluster, dump_fq, outbase, min_alt_depth=int(args.min_alt_depth), min_alt_frac=float(args.min_alt_frac), min_total_depth_frac=float(args.min_total_depth_frac))
 
             if te_type in inslib:
                 samples = list(set([read.bamname for read in cluster.reads if read.useable]))
