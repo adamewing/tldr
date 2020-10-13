@@ -120,7 +120,7 @@ class MSA:
 
 
 class InsRead:
-    def __init__(self, bamfile, q_chrom, q_start, q_end, r_start, r_end, r_name, r_seq, r_qual, is_ins, is_clip, clip_end, phase):
+    def __init__(self, bamfile, q_chrom, q_start, q_end, r_start, r_end, r_name, r_seq, r_qual, r_mapq, is_ins, is_clip, clip_end, phase):
         self.bampath  = bamfile
         self.bamname  = '.'.join(os.path.basename(bamfile).split('.')[:-1])
         self.q_chrom  = q_chrom
@@ -131,6 +131,7 @@ class InsRead:
         self.r_name   = r_name
         self.r_seq    = r_seq
         self.r_qual   = r_qual
+        self.r_mapq   = r_mapq
         self.is_ins   = is_ins
         self.is_clip  = is_clip
         self.clip_end = clip_end
@@ -321,6 +322,10 @@ class InsCluster:
                 l.append(read.te_elt_end - read.te_elt_start)
 
         return np.median(l)
+
+    def te_median_mapq(self):
+        return np.median([read.r_mapq for read in self.reads if read.useable])
+
 
     def te_useable_count(self):
         return len([read for read in self.reads if read.useable])
@@ -1433,7 +1438,7 @@ def build_clusters(args, outbase, chrom):
                     if None not in (HP, PS):
                         phase = str(PS) + ':' + str(HP)
 
-                    ins_read = InsRead(bam.filename.decode(), read.reference_name, q_start, q_end, r_start, r_end, read.qname, read.seq, read.qual, is_ins, is_clip, clip_end, phase)
+                    ins_read = InsRead(bam.filename.decode(), read.reference_name, q_start, q_end, r_start, r_end, read.qname, read.seq, read.qual, read.mapq, is_ins, is_clip, clip_end, phase)
 
                     cluster_id = None
 
@@ -1526,6 +1531,7 @@ header = [
 'LengthIns',
 'Inversion',
 'UnmapCover',
+'MedianMapQ',
 'UsedReads',
 'SpanReads',
 'NumSamples',
@@ -1677,6 +1683,7 @@ def main(args):
                     output['LengthIns']   = c_unmap[1] - c_unmap[0]
                     output['Inversion']   = cluster.detect_inversion()
                     output['UnmapCover']  = unmap_cover
+                    output['MedianMapQ']  = cluster.te_median_mapq()
                     output['UsedReads']   = cluster.te_useable_count()
                     output['SpanReads']   = cluster.te_embedded_count()
                     output['NumSamples']  = cluster.te_samples()
