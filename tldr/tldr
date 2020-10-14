@@ -1606,6 +1606,10 @@ def main(args):
 
     pickles = []
 
+    if args.trdcol:
+        header.append('Transduction_5p')
+        header.append('Transduction_3p')
+
     table_out = open(outbase+'.table.txt', 'w')
     table_out.write('%s\n' % '\t'.join(header))
 
@@ -1718,6 +1722,24 @@ def main(args):
 
                                 detail_out.write('%s\n' % '\t'.join(map(str, [detail[col] for col in detail_header])))
 
+                    if args.trdcol:
+                        ins_seg = cluster.cons[c_unmap[0]:c_unmap[1]]
+                        trd_5p = ins_seg[:start_unmap]
+                        trd_3p = ins_seg[end_unmap:]
+
+                        if output['Strand'] == '-':
+                            trd_5p, trd_3p = trd_3p, trd_5p
+
+                        if trd_5p == '':
+                            trd_5p = 'NA'
+
+                        if trd_3p == '':
+                            trd_3p = 'NA'
+
+                        output['Transduction_5p'] = trd_5p
+                        output['Transduction_3p'] = trd_3p
+
+
                     if args.color_consensus:
                         C_YELLOW  = "\033[33m"
                         C_BLUE    = "\033[34m"
@@ -1771,6 +1793,7 @@ if __name__ == '__main__':
     parser.add_argument('--color_consensus', action='store_true', default=False)
     parser.add_argument('--detail_output', action='store_true', default=False, help='outputs per-insertion .bams and per-read mapping information')
     parser.add_argument('--extend_consensus', default=0, help='if --detail_output option is enabled, extend output per-sample consensus by n bases (default 0)')
+    parser.add_argument('--trdcol', action='store_true', default=False, help='add columns needed for transduction mapping')
     parser.add_argument('--keep_pickles', action='store_true', default=False, help='do not remove per-chromosome pickle files')
     args = parser.parse_args()
     main(args)
