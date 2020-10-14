@@ -111,10 +111,10 @@ def main(args):
                 for n, field in enumerate(line.strip().split('\t')):
                     rec[header[n]] = field
 
-                if rec['Transduction_5p'] != 'NA':
+                if rec['Transduction_5p'] != 'NA' and len(rec['Transduction_5p']) > int(args.mintrd):
                     trd_out.write('>%s\n%s\n' % (rec['UUID']+'_5p', rec['Transduction_5p']))
 
-                if rec['Transduction_3p'] != 'NA':
+                if rec['Transduction_3p'] != 'NA' and len(rec['Transduction_3p']) > int(args.mintrd):
                     trd_out.write('>%s\n%s\n' % (rec['UUID']+'_3p', rec['Transduction_3p']))
 
     result = mm2_search(args.ref, trd_fa, args.refelts, args.nonrefelts, window=int(args.window))
@@ -188,6 +188,7 @@ if __name__ == '__main__':
     parser.add_argument('-r', '--refelts', required=True, help='reference TE locations (tabix-indexed)')
     parser.add_argument('-n', '--nonrefelts', default=None, help='known non-reference elements (tabix-indexed)')
     parser.add_argument('-w', '--window', default=100, help='search window (default = 100)')
+    parser.add_argument('-m', '--mintrd', default=30, help='minimum transduction size (default=30)')
     args = parser.parse_args()
     main(args)
 
