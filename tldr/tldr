@@ -1511,9 +1511,11 @@ def assign_filter(output, c_unmap, args):
     if output['LengthIns'] < int(args.min_te_len):
         filters.append('ShortIns')
 
+    if int(output['MedianMapQ']) == 0:
+        filters.append('ZeroMapQ')
+
     if len(filters) > 0:
         return ','.join(filters)
-
     
     return 'PASS'
 
@@ -1723,9 +1725,13 @@ def main(args):
                                 detail_out.write('%s\n' % '\t'.join(map(str, [detail[col] for col in detail_header])))
 
                     if args.trdcol:
-                        ins_seg = cluster.cons[c_unmap[0]:c_unmap[1]]
-                        trd_5p = ins_seg[:start_unmap]
-                        trd_3p = ins_seg[end_unmap:]
+                        trd_5p = 'NA'
+                        trd_3p = 'NA'
+
+                        if cluster.cons_te_align is not None:
+                            ins_seg = cluster.cons[c_unmap[0]:c_unmap[1]]
+                            trd_5p = ins_seg[:start_unmap]
+                            trd_3p = ins_seg[end_unmap:]
 
                         if output['Strand'] == '-':
                             trd_5p, trd_3p = trd_3p, trd_5p
