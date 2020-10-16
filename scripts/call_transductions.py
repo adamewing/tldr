@@ -7,6 +7,9 @@ import subprocess
 import logging
 
 from uuid import uuid4
+from collections import defaultdict as dd
+
+from bx.intervals.intersection import Intersecter, Interval
 
 FORMAT = '%(asctime)s %(message)s'
 logging.basicConfig(format=FORMAT)
@@ -14,7 +17,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def mm2_search(ref_fa, trd_fa, ref_elts, nr_elts, window=100):
+def mm2_search(ref_fa, trd_fa, ref_elts, nr_elts, tldr_forest, window=100):
     FNULL = open(os.devnull, 'w')
 
     ref_tbx = pysam.Tabixfile(ref_elts)
@@ -30,6 +33,9 @@ def mm2_search(ref_fa, trd_fa, ref_elts, nr_elts, window=100):
     bamstream = pysam.AlignmentFile(view.stdout, 'rb')
 
     for read in bamstream:
+        if None in (read.reference_name, read.reference_start, read.reference_end, read.mapq):
+            continue
+
         align_info = ['%s:%d:%d:%d' % (read.reference_name, read.reference_start, read.reference_end, read.mapq)]
         if read.reference_name in ref_tbx.contigs:
             for ref_elt in ref_tbx.fetch(read.reference_name, read.reference_start-window, read.reference_end+window):
@@ -38,6 +44,11 @@ def mm2_search(ref_fa, trd_fa, ref_elts, nr_elts, window=100):
         if read.reference_name in nr_tbx.contigs:
             for nr_elt in nr_tbx.fetch(read.reference_name, read.reference_start-window, read.reference_end+window):
                 align_info.append(':'.join(nr_elt.strip().split()) + ':NR')
+
+        if read.reference_name in tldr_forest:
+            for tldr_elt in tldr_forest[read.reference_name].find(read.reference_start-window, read.reference_end+window):
+                rec = tldr_elt.value
+                align_info.append(':'.join((rec['Chrom'], rec['Start'], rec['End'], rec['Subfamily'], rec['UUID'], 'TLDR')))
 
         result[read.query_name] = align_info
 
@@ -58,7 +69,7 @@ def filter(rec, telocs, maplocs, window=10000):
         map_qual  = int(map_qual)
 
         if map_chrom == rec_chrom:
-            if min(rec_end, map_end) - max(rec_end, map_end) > 0:
+            if min(rec_end, map_end) - max(rec_start, map_start) > 0:
                 filters.append('InsClose')
 
         if map_qual == 0:
@@ -90,6 +101,7 @@ def double_trd_filter(map_5p, map_3p, window=10000):
 
 
 def main(args):
+    tldr_forest = dd(Intersecter)
 
     header = []
 
@@ -117,7 +129,9 @@ def main(args):
                 if rec['Transduction_3p'] != 'NA' and len(rec['Transduction_3p']) > int(args.mintrd):
                     trd_out.write('>%s\n%s\n' % (rec['UUID']+'_3p', rec['Transduction_3p']))
 
-    result = mm2_search(args.ref, trd_fa, args.refelts, args.nonrefelts, window=int(args.window))
+                tldr_forest[rec['Chrom']].add_interval(Interval(int(rec['Start']), int(rec['End']), value=rec))
+
+    result = mm2_search(args.ref, trd_fa, args.refelts, args.nonrefelts, tldr_forest, window=int(args.window))
 
     with open(args.table, 'r') as table:
         for i, line in enumerate(table):
@@ -140,7 +154,7 @@ def main(args):
 
             trd_map  = {'5p':'NA', '3p':'NA'}
             trd_te   = {'5p':'NA', '3p':'NA'}
-            trd_filt = {'5p':'NA', '3p':'NA'}
+            trd_filt = {'5p':['NA'], '3p':['NA']}
             
             for s in ['5p','3p']:
                 if rec['UUID']+'_'+s in result:
@@ -148,7 +162,7 @@ def main(args):
                     telocs = []
 
                     for trd in result[rec['UUID']+'_'+s]:
-                        if trd.split(':')[-1] in ('REF', 'NR'):
+                        if trd.split(':')[-1] in ('REF', 'NR', 'TLDR'):
                             telocs.append(trd)
                         else:
                             maplocs.append(trd)
