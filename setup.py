@@ -70,7 +70,7 @@ setup(
     scripts=['tldr/tldr'],
     packages=find_packages(),
     install_requires = [
-        'cython>0.29.0',
+        'cython>=0.29.0',
         'pysam>=0.8.1',
         'bx-python>=0.5.0',
         'scikit-learn>=0.20.0',
