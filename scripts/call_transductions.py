@@ -176,7 +176,6 @@ def main(args):
 
                         trd_filt[s] = filters
 
-            print(trd_filt['5p'][0], trd_filt['3p'][0])
             if trd_filt['5p'][0] == trd_filt['3p'][0] == 'PASS':
                 if double_trd_filter(trd_map['5p'], trd_map['3p']):
                     trd_filt['5p'] = ['LocDisagree']
