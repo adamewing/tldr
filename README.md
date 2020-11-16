@@ -165,7 +165,7 @@ See https://github.com/adamewing/te-nanopore-tools
 
 ## References
 
-Adam D Ewing, Nathan Smits, Francisco J Sanchez-Luque, Jamila Faivre, Paul M Brennan, Seth W Cheetham, Geoffrey J Faulkner. Nanopore sequencing enables comprehensive transposable element epigenomic profiling. bioRxiv 2020.05.24.113068; doi: https://doi.org/10.1101/2020.05.24.113068
+Adam D. Ewing, Nathan Smits, Francisco J. Sanchez-Luque, Sandra R. Richardson, Seth W. Cheetham, Geoffrey J. Faulkner. Nanopore Sequencing Enables Comprehensive Transposable Element Epigenomic Profiling. 2020. Molecular Cell, Online ahead of print: https://doi.org/10.1016/j.molcel.2020.10.024
 
 ## Getting help
 
