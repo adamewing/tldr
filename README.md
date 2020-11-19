@@ -84,7 +84,7 @@ Specify a text file of chromosome names (one per line) and tldr will focus only 
 ### -m/--minreads
 Minimum supporting read count to trigger a consensus / insertion call (default = 3)
 
-### --max_te_length
+### --max_te_len
 Maximum insertion size (default = 7000)
 
 ### --min_te_len
