@@ -786,7 +786,12 @@ def load_falib(infa):
                 if seq != '':
                     seqdict[seqid] = seq
                 seqid = line.lstrip('>').strip().split()[0]
-                seq   = ''
+
+                if ':' not in seqid:
+                    logger.error("TE reference sequence .fasta headers must be in the format superfamily:subfamily e.g. >L1:L1Ta")
+                    return None
+
+                seq = ''
             else:
                 assert seqid != ''
                 seq = seq + line.strip()
@@ -871,10 +876,13 @@ def minimap2_breakpoint(ref, cons, side):
 
     mm2_cmd  = ['minimap2', '-x', 'map-ont', '-Y', '-a', tmp_ref, tmp_cons]
     view_cmd = ['samtools', 'view', '-b', '-']
+
     aln  = subprocess.Popen(mm2_cmd, stdout=subprocess.PIPE, stderr=FNULL)
     view = subprocess.Popen(view_cmd, stdin=aln.stdout, stdout=subprocess.PIPE, stderr=FNULL)
 
+    save = pysam.set_verbosity(0)
     bamstream = pysam.AlignmentFile(view.stdout, 'rb')
+    pysam.set_verbosity(save)
 
     for read in bamstream:
         if not read.is_unmapped and not read.is_secondary and not read.is_supplementary:
@@ -926,7 +934,9 @@ def minimap2_extend(ref, cons):
     aln  = subprocess.Popen(mm2_cmd, stdout=subprocess.PIPE, stderr=FNULL)
     view = subprocess.Popen(view_cmd, stdin=aln.stdout, stdout=subprocess.PIPE, stderr=FNULL)
 
+    save = pysam.set_verbosity(0)
     bamstream = pysam.AlignmentFile(view.stdout, 'rb')
+    pysam.set_verbosity(save)
 
     map_ref_start  = None
     map_ref_end    = None
@@ -982,7 +992,10 @@ def minimap2_profile(ref, cons, max_de = 0.12):
     aln  = subprocess.Popen(mm2_cmd, stdout=subprocess.PIPE, stderr=FNULL)
     view = subprocess.Popen(view_cmd, stdin=aln.stdout, stdout=subprocess.PIPE, stderr=FNULL)
 
+    save = pysam.set_verbosity(0)  # workaround for htslib diagnostic message
     bamstream = pysam.AlignmentFile(view.stdout, 'rb')
+    pysam.set_verbosity(save)
+
     profiles = []
 
     for read in bamstream:
@@ -991,7 +1004,6 @@ def minimap2_profile(ref, cons, max_de = 0.12):
                 if read.get_tag('de') > max_de:
                     continue
 
-            #print(read)
             profile = np.zeros(len(cons))-1
 
             b = 0
@@ -1348,7 +1360,6 @@ def process_cluster(cluster, inslib, outbase, args):
 
                                     out_fq.write('@%s\n%s\n+\n%s\n' % (read.query_name, seq, qual))
 
-
                         te_outbam = minimap2_bam(cons_out_fa, per_bam_fq, '%s/%s.%s.te.bam' % (outbase, sample, cluster.uuid))
                         os.remove(per_bam_fq)
 
@@ -1596,7 +1607,9 @@ def main(args):
 
 
     inslib = load_falib(args.elts)
-
+    if inslib is None:
+        logger.error("loading insertion library %s failed." % args.elts)
+        sys.exit(1)
 
     # parallelise cluster building across chromosomes
     pool = mp.Pool(processes=int(args.procs))
