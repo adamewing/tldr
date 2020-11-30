@@ -177,9 +177,6 @@ class InsRead:
         self.te_r_seq_end   = te.max_tgt_coord()
         self.te_read_orient = te.max_qry_orient()
 
-        #if self.te_read_orient == '-':
-        #    self.te_r_seq_start, self.te_r_seq_end = self.te_r_seq_end, self.te_r_seq_start
-
     def fastq(self):
         return '@%s\n%s\n+\n%s\n' % (self.r_name, self.r_seq_trimmed, self.r_qual_trimmed)
 
@@ -401,7 +398,6 @@ class InsCluster:
 
         l_ext = 0
         while l > 0 and cons[l].upper() == cons[r].upper():
-            #print(cons[l], cons[r])
             cons[l] = cons[l].upper()
             cons[r] = cons[r].upper()
             self.tsd_seq = cons[l].upper() + self.tsd_seq
@@ -409,28 +405,18 @@ class InsCluster:
             r -= 1
             l_ext += 1
 
-
-        #print('left', l_ext)
-
-
         # extend right
         l = left_bp
         r = right_bp+tsd_len
 
         r_ext = 0
         while r < len(cons) and cons[l].upper() == cons[r].upper():
-            #print(cons[l], cons[r])
             cons[l] = cons[l].upper()
             cons[r] = cons[r].upper()
             self.tsd_seq = self.tsd_seq + cons[l].upper()
             l += 1
             r += 1
             r_ext += 1
-
-
-        #print('right', r_ext)
-
-        #print(tsd_left, tsd_right)
 
         self.cons = ''.join(cons)
 
@@ -710,7 +696,6 @@ def mafft(in_fn):
 
     out_fn = '.'.join(in_fn.split('.')[:-1]) + '.msa.fa'
 
-    #args = ['mafft', '--maxiterate', str(iterations), '--randomseed', '1', '--thread', str(threads), in_fn]
     args = ['mafft', '--randomseed', '1', in_fn]
 
     FNULL = open(os.devnull, 'w')
@@ -887,13 +872,11 @@ def minimap2_breakpoint(ref, cons, side):
     for read in bamstream:
         if not read.is_unmapped and not read.is_secondary and not read.is_supplementary:
             if side == 'L':
-                #print(read.get_aligned_pairs(matches_only=True)[-1])
                 os.remove(tmp_ref)
                 os.remove(tmp_cons)
                 return read.get_aligned_pairs(matches_only=True)[-1]
 
             if side == 'R':
-                #print(read.get_aligned_pairs(matches_only=True)[0])
                 os.remove(tmp_ref)
                 os.remove(tmp_cons)
                 return read.get_aligned_pairs(matches_only=True)[0]
@@ -1031,8 +1014,6 @@ def minimap2_profile(ref, cons, max_de = 0.12):
 
         merged_profile.append(matched)
 
-    #print(','.join(map(str, merged_profile)))
-
     os.remove(tmp_ref)
     os.remove(tmp_cons)
 
@@ -1099,7 +1080,6 @@ def alter_ref(ins_ref, pileup, depth, te_align_count, min_alt_depth=3, min_alt_f
 
         if i in pileup:
             if depth[i] < te_align_count*min_total_depth_frac:
-                #print('%d: ref %s, dropped at depth %d, te_align_count: %d, mtdf: %f, pileup: %s' % (i, b, depth[i], te_align_count, min_total_depth_frac, str(pileup[i])))
                 continue
 
             snv_p = [p for p in pileup[i] if p[0] not in ('+', '-', '.', ',')]
@@ -1118,11 +1098,9 @@ def alter_ref(ins_ref, pileup, depth, te_align_count, min_alt_depth=3, min_alt_f
                 ins_seq, ins_count = Counter(ins_p).most_common()[0]
 
             if alt_count > depth[i]*min_alt_frac and alt_count >= min_alt_depth:
-                #print('%d: ref %s, alt %s, pileup: %s' % (i, b, alt_base, str(pileup[i])))
                 b = alt_base
 
             if ins_count > depth[i]*min_alt_frac and ins_count >= min_alt_depth:
-                #print('%d: ref %s, ins %s, pileup: %s' % (i, b, ins_seq, str(pileup[i])))
                 b += ins_seq.lstrip('+')
 
             if b != '*': # deletion
@@ -1205,7 +1183,13 @@ def process_cluster(cluster, inslib, outbase, args):
             if te_type in inslib:
                 samples = list(set([read.bamname for read in cluster.reads if read.useable]))
 
-                ref_region = ref.fetch(cluster.chrom(), int(cluster.breakpoints[0]) - int(args.flanksize), int(cluster.breakpoints[1]) + int(args.flanksize))
+                rr_start = int(cluster.breakpoints[0]) - int(args.flanksize)
+                rr_end   = int(cluster.breakpoints[1]) + int(args.flanksize)
+
+                if rr_start < 0:
+                    rr_start = 0
+
+                ref_region = ref.fetch(cluster.chrom(), rr_start, rr_end)
                 
                 cluster.cons_align_map = minimap2_profile(ref_region, cluster.cons)
                 cluster.mask_cons()
@@ -1344,11 +1328,13 @@ def process_cluster(cluster, inslib, outbase, args):
                         bampath = cluster.bampath(sample)
 
                         per_bam_fq = '%s/%s.%s.cluster.fq' % (outbase, sample, cluster.uuid)
-
-                        #usereads = [read.r_name for read in cluster.reads if read.useable]
                         
                         with open(per_bam_fq, 'w') as out_fq:
                             bam = pysam.AlignmentFile(bampath)
+
+                            if out_start < 0:
+                                out_start = 0
+
                             for read in bam.fetch(cluster.chrom(), out_start, out_end):
                                 if not read.is_secondary and not read.is_supplementary:
                                     seq = read.seq
@@ -1666,6 +1652,9 @@ def main(args):
 
                     if nonref:
                         ins_start, ins_end = cluster.interval()
+
+                        if ins_start < 0:
+                            ins_start = 0
 
                         if cluster.chrom() in nonref.contigs:
                             for nr in nonref.fetch(cluster.chrom(), ins_start, ins_end):
