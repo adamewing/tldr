@@ -17,6 +17,67 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
+def load_falib(infa):
+    seqdict = {}
+
+    with open(infa, 'r') as fa:
+        seqid = ''
+        seq   = ''
+        for line in fa:
+            if line.startswith('>'):
+                if seq != '':
+                    seqdict[seqid] = seq
+                seqid = line.lstrip('>').strip().split()[0]
+
+                if ':' not in seqid:
+                    logger.error("TE reference sequence .fasta headers must be in the format superfamily:subfamily e.g. >L1:L1Ta")
+                    return None
+
+                seq = ''
+            else:
+                assert seqid != ''
+                seq = seq + line.strip()
+
+    if seqid not in seqdict and seq != '':
+        seqdict[seqid] = seq
+
+    return seqdict
+
+
+def align(qryseq, refseq, elt='PAIR', minmatch=85.0):
+    rnd = str(uuid4())
+    tgtfa = 'tmp.' + rnd + '.tgt.fa'
+    qryfa = 'tmp.' + rnd + '.qry.fa'
+
+    tgt = open(tgtfa, 'w')
+    qry = open(qryfa, 'w')
+
+    tgt.write('>ref' + '\n' + refseq + '\n')
+    qry.write('>qry' + '\n' + qryseq + '\n')
+
+    tgt.close()
+    qry.close()
+
+    cmd = ['exonerate', '--bestn', '1', '-m', 'ungapped', '--showalignment','0', '--ryo', elt + '\t%s\t%qab\t%qae\t%tab\t%tae\t%pi\t%qS\t%tS\n', qryfa, tgtfa]
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    best = []
+    topscore = 0
+
+    for pline in p.stdout.readlines():
+        pline = pline.decode()
+        if pline.startswith(elt):
+            c = pline.strip().split()
+            if int(c[1]) > topscore and float(c[6]) >= minmatch:
+                topscore = int(c[1])
+                best = c
+
+    os.remove(tgtfa)
+    os.remove(qryfa)
+
+    return best
+
+
 def mm2_search(ref_fa, trd_fa, ref_elts, nr_elts, tldr_forest, window=100):
     FNULL = open(os.devnull, 'w')
 
@@ -55,7 +116,7 @@ def mm2_search(ref_fa, trd_fa, ref_elts, nr_elts, tldr_forest, window=100):
     return result
 
 
-def filter(rec, telocs, maplocs, window=10000):
+def filter(rec, telocs, maplocs, mask, window=10000):
     filters = []
 
     rec_chrom = rec['Chrom']
@@ -71,6 +132,18 @@ def filter(rec, telocs, maplocs, window=10000):
         if map_chrom == rec_chrom:
             if min(rec_end, map_end) - max(rec_start, map_start) > 0:
                 filters.append('InsClose')
+
+        if mask:
+            map_chrom, orig_map_start, orig_map_end, map_qual = maploc.split(':')
+            orig_map_start = int(orig_map_start)
+            orig_map_end   = int(orig_map_end)
+            map_qual       = int(map_qual)
+
+            if map_chrom in mask.contigs:
+                for mask_rec in mask.fetch(map_chrom, orig_map_start, orig_map_end):
+                    mask_start, mask_end = map(int, mask_rec.split()[1:3])
+                    if orig_map_start >= mask_start and orig_map_end <= mask_end:
+                        filters.append('Masked')
 
         if map_qual == 0:
             filters.append('ZeroMapQ')
@@ -102,6 +175,12 @@ def double_trd_filter(map_5p, map_3p, window=10000):
 
 def main(args):
     tldr_forest = dd(Intersecter)
+    telib = load_falib(args.elts)
+
+    mask = None
+
+    if args.mask:
+        mask = pysam.Tabixfile(args.mask)
 
     header = []
 
@@ -172,7 +251,7 @@ def main(args):
                         if len(telocs) > 0:
                             trd_te[s]  = ','.join(telocs)
 
-                        filters = filter(rec, telocs, maplocs)
+                        filters = filter(rec, telocs, maplocs, mask)
 
                         trd_filt[s] = filters
 
@@ -180,6 +259,14 @@ def main(args):
                 if double_trd_filter(trd_map['5p'], trd_map['3p']):
                     trd_filt['5p'] = ['LocDisagree']
                     trd_filt['3p'] = ['LocDisagree']
+
+            match = 'NA'
+
+            for s in ['5p', '3p']:
+                if trd_filt[s][0] == 'PASS':
+                    tr_seq = rec['Transduction_'+s].upper()
+                    te_seq = telib[rec['Family'] + ':' + rec['Subfamily']].upper().rstrip('A')
+                    match  = align(tr_seq, te_seq, elt=rec['UUID'])
 
             rec_out = line.strip()
 
@@ -198,10 +285,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='foo')
     parser.add_argument('-t', '--table', required=True, help='tldr table')
     parser.add_argument('-f', '--ref', required=True, help='reference genome (fasta or minimap2 index)')
+    parser.add_argument('-e', '--elts', required=True, help='reference elements .fa')
     parser.add_argument('-r', '--refelts', required=True, help='reference TE locations (tabix-indexed)')
     parser.add_argument('-n', '--nonrefelts', default=None, help='known non-reference elements (tabix-indexed)')
     parser.add_argument('-w', '--window', default=100, help='search window (default = 100)')
     parser.add_argument('-m', '--mintrd', default=30, help='minimum transduction size (default=30)')
+    parser.add_argument('--mask', default=None, help='tabix')
     args = parser.parse_args()
     main(args)
 
