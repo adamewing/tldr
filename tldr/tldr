@@ -155,6 +155,10 @@ class InsRead:
         self.useable = False # set by process_cluster
 
         self.r_pos = None
+
+        if self.r_qual is None:
+            self.r_qual = "F"*len(self.r_seq)
+
         if self.r_start:
             self.r_pos = self.r_start
         else:
