@@ -1127,6 +1127,8 @@ def process_cluster(cluster, inslib, outbase, args):
             if te:
                 insread.te_info(te)
 
+            logger.debug('cluster %s, alignment group:\n%s' % (cluster.uuid, str(te)))
+
         if cluster.te_align_count() >= minreads:
             major_family = cluster.te_major_family()
             major_subfam = cluster.te_major_subfam()
@@ -1580,7 +1582,7 @@ def main(args):
     if args.outbase is not None:
         outbase = args.outbase
 
-    logger.info('te-ont started with command: %s' % ' '.join(sys.argv))
+    logger.info('tldr started with command: %s' % ' '.join(sys.argv))
     logger.info('output basename: %s' % outbase)
 
     if not os.path.exists(outbase):
