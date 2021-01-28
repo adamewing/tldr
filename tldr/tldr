@@ -267,6 +267,10 @@ class InsCluster:
                             out.write(read.fastq())
                     else:
                         out.write(read.fastq())
+
+                elif te_fam == 'NR': # no TE ref mode
+                    out.write(read.fastq())
+
         return out_fn
 
     def dump_fasta(self, te_fam=None):
@@ -283,6 +287,10 @@ class InsCluster:
                             out.write(read.fasta())
                     else:
                         out.write(read.fasta())
+
+                elif te_fam == 'NR': # no TE ref mode
+                    out.write(read.fasta())
+
 
         return out_fn
 
@@ -1125,7 +1133,7 @@ def alter_ref(ins_ref, pileup, depth, te_align_count, min_alt_depth=3, min_alt_f
     return ''.join(altered)
 
 
-def process_cluster(cluster, inslib, outbase, args):
+def process_cluster(cluster, inslib, outbase, args, noref_mode):
     minreads = int(args.minreads)
     te_lib = args.elts
     ref = pysam.Fastafile(args.ref)
@@ -1141,20 +1149,30 @@ def process_cluster(cluster, inslib, outbase, args):
 
             logger.debug('cluster %s, alignment group:\n%s' % (cluster.uuid, str(te)))
 
-        if cluster.te_align_count() >= minreads:
+        if cluster.te_align_count() >= minreads or noref_mode:
             major_family = cluster.te_major_family()
             major_subfam = cluster.te_major_subfam()
             family_frac  = cluster.te_fam_frac(major_family)
 
             use_reads = []
 
-            for r_name, z in cluster.te_overlap_zscores().items():
-                if abs(z) < 2:
-                    use_reads.append(r_name)
+            if noref_mode:
+                for r in cluster.reads:
+                    use_reads.append(r.r_name)
+
+            else:
+                for r_name, z in cluster.te_overlap_zscores().items():
+                    if abs(z) < 2:
+                        use_reads.append(r_name)
 
             for read in cluster.reads:
-                if read.r_name in use_reads and read.te:
+                if (read.r_name in use_reads and read.te) or noref_mode:
                     read.useable = True
+
+            if noref_mode:
+                major_family = 'NR'
+                major_subfam = 'NR'
+                family_frac = 1.0
 
             if family_frac < 0.5 or None in (major_family, major_subfam):
                 return None
@@ -1198,7 +1216,7 @@ def process_cluster(cluster, inslib, outbase, args):
 
             cluster.cons = minimap2_pileup(cluster, dump_fq, outbase, min_alt_depth=int(args.min_alt_depth), min_alt_frac=float(args.min_alt_frac), min_total_depth_frac=float(args.min_total_depth_frac))
 
-            if te_type in inslib:
+            if noref_mode or te_type in inslib:
                 samples = list(set([read.bamname for read in cluster.reads if read.useable]))
 
                 rr_start = int(cluster.breakpoints[0]) - int(args.flanksize)
@@ -1488,7 +1506,7 @@ def build_clusters(args, outbase, chrom):
     return None
 
 
-def assign_filter(output, c_unmap, args):
+def assign_filter(output, c_unmap, args, noref_mode):
     filters = []
 
     left_flank_len = c_unmap[0]
@@ -1500,17 +1518,18 @@ def assign_filter(output, c_unmap, args):
     if right_flank_len*2 < int(args.flanksize) or right_flank_len > int(args.flanksize)*2:
         filters.append('RightFlankSize')
 
-    if output['UnmapCover'] == 'NA':
-        filters.append('UnmapCoverNA')
+    if not noref_mode:
+        if output['UnmapCover'] == 'NA':
+            filters.append('UnmapCoverNA')
 
-    elif output['UnmapCover'] < 0.5:
-        filters.append('UnmapCover<0.5')
+        elif output['UnmapCover'] < 0.5:
+            filters.append('UnmapCover<0.5')
 
-    if output['Family'] == 'NA':
-        filters.append('NoFamily')
+        if output['Family'] == 'NA':
+            filters.append('NoFamily')
 
-    if output['StartTE'] == 'NA':
-        filters.append('NoTEAlignment')
+        if output['StartTE'] == 'NA':
+            filters.append('NoTEAlignment')
 
     if not output['Remappable']:
         filters.append('NonRemappable')
@@ -1609,11 +1628,19 @@ def main(args):
             for line in _:
                 chroms.append(line.strip())
 
+    noref_mode = False
 
-    inslib = load_falib(args.elts)
-    if inslib is None:
-        logger.error("loading insertion library %s failed." % args.elts)
-        sys.exit(1)
+    if args.elts.upper() == 'NONE':
+        logger.info('"None" passed to -e/--elts, running without TE reference')
+        noref_mode = True
+
+    inslib = None
+
+    if not noref_mode:
+        inslib = load_falib(args.elts)
+        if inslib is None:
+            logger.error("loading insertion library %s failed." % args.elts)
+            sys.exit(1)
 
     # parallelise cluster building across chromosomes
     pool = mp.Pool(processes=int(args.procs))
@@ -1626,6 +1653,9 @@ def main(args):
     pickles = []
 
     if args.trdcol:
+        if noref_mode:
+            logger.warning('--trdcol with noref mode: transductions not meaningful without TE reference')
+
         header.append('Transduction_5p')
         header.append('Transduction_3p')
 
@@ -1654,12 +1684,12 @@ def main(args):
             # parallelise cluster processing per cluster
             reslist = []
             for cluster in clusters:
-                res = pool.apply_async(process_cluster, [cluster, inslib, outbase, args])
+                res = pool.apply_async(process_cluster, [cluster, inslib, outbase, args, noref_mode])
                 reslist.append(res)
 
             processed_clusters = []
             for res in reslist:
-                processed_clusters.append(res.get()) 
+                processed_clusters.append(res.get())
 
             c_count = 0
 
@@ -1719,7 +1749,7 @@ def main(args):
                     output['Consensus']   = cluster.cons
                     output['Phasing']     = cluster.phase()
                     output['Remappable']  = cluster.breakpoints_remappable
-                    output['Filter']      = assign_filter(output, c_unmap, args)
+                    output['Filter']      = assign_filter(output, c_unmap, args, noref_mode)
 
                     detail = od()
 
@@ -1802,7 +1832,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Find TE insertions in ONT data')
     parser.add_argument('-b', '--bams', required=True, help='comma seperated bam list')
     parser.add_argument('-e', '--elts', help='reference elements .fa', required=True)
-    parser.add_argument('-r', '--ref', help='reference fasta (samtools faidx indexed)', required=True)
+    parser.add_argument('-r', '--ref', help='reference fasta (samtools faidx indexed) or "none" for no TE ref mode', required=True)
     parser.add_argument('-p', '--procs', help='process count', default=1)
     parser.add_argument('-m', '--minreads', default=3, help='minimum read count to form cluster (default = 3)')
     parser.add_argument('-o', '--outbase', default=None, help='base name for output files (defaults to bam name(s)')
