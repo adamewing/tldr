@@ -773,6 +773,18 @@ def load_falib(infa):
         for line in fa:
             if line.startswith('>'):
                 if seq != '':
+                    seq = seq.upper()
+                    checkseq = []
+
+                    for b in seq:
+                        if b in ['A','C','G','T','N']:
+                            checkseq.append(b)
+                        else:
+                            logger.warning('base in %s, id %s, not in (A,C,T,G,N): %s. Changed to "N"' % (infa, seqid, b))
+                            checkseq.append('N')
+
+                    seq = ''.join(checkseq)
+                        
                     seqdict[seqid] = seq
                 seqid = line.lstrip('>').strip().split()[0]
 
