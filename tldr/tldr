@@ -25,6 +25,9 @@ logging.basicConfig(format=FORMAT)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+import random
+random.seed(1)
+
 
 class AlignedColumn:
     def __init__(self):
@@ -242,6 +245,28 @@ class InsCluster:
 
     def add(self, read, flanksize=200):
         self.reads.append(read)
+
+    def downsample(self, target_size):
+        assert self.cons is None, 'cannot downsample a processed cluster'
+
+        ds_cluster = InsCluster(self.uuid)
+        
+        ins_reads = [r for r in self.reads if r.is_ins]
+        clip_reads = [r for r in self.reads if r.is_clip]
+
+        for read in ins_reads:
+            if len(ds_cluster) < target_size:
+                ds_cluster.add(read)
+            else:
+                return ds_cluster
+
+        for read in clip_reads:
+            if len(ds_cluster) < target_size:
+                ds_cluster.add(read)
+            else:
+                return ds_cluster
+
+        return ds_cluster
 
     def chrom(self):
         return self.reads[0].q_chrom
@@ -1155,11 +1180,24 @@ def process_cluster(cluster, inslib, outbase, args, noref_mode):
     minreads = int(args.minreads)
     embed_minreads = int(args.embed_minreads)
 
+    max_cluster_size = None
+    if args.max_cluster_size:
+        max_cluster_size = int(args.max_cluster_size)
+
     te_lib = args.elts
     ref = pysam.Fastafile(args.ref)
 
     if cluster.prelim_filter(minreads=minreads, embed_minreads=embed_minreads):
         logger.debug('processing cluster %s, length: %d' % (cluster.uuid, len(cluster)))
+
+        if len(cluster) > 500 and (max_cluster_size is None):
+            logger.warning('found a cluster with length > 500, consider --max_cluster_size if runtime is too long')
+
+        if max_cluster_size:
+            if len(cluster) > max_cluster_size:
+                cluster = cluster.downsample(max_cluster_size)
+                logger.info('downsampled cluster %s to %d reads' % (cluster.uuid, max_cluster_size))
+
         cluster.trim_reads(int(args.flanksize))
 
         for insread in cluster.reads:
@@ -1875,6 +1913,7 @@ if __name__ == '__main__':
     parser.add_argument('--min_alt_frac', default=0.5, help='parameter for base changes in consensus cleanup (defult=0.5)')
     parser.add_argument('--min_alt_depth', default=3, help='parameter for base changes in consensus cleanup (defult=3)')
     parser.add_argument('--min_total_depth_frac', default=0.1, help='parameter for base changes in consensus cleanup (defult=0.25)')
+    parser.add_argument('--max_cluster_size', default=None, help='limit cluster size, embed-biased downsample larger clusters')
     parser.add_argument('--wiggle', default=200, help='interval padding for breakpoint search (default = 50)')
     parser.add_argument('--flanksize', default=500, help='flank size for read trimming (default = 500)')
     parser.add_argument('-n', '--nonref', help='known nonref tabix', default=None)
