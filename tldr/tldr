@@ -572,6 +572,24 @@ class InsCluster:
 
         return z
 
+
+    def mapq_zscores(self):
+        z = {}
+        for read in self.reads:
+            z[read.r_name] = read.r_mapq
+
+        o_mean = np.mean(list(z.values()))
+        o_std   = np.std(list(z.values()))
+
+        for name, s in z.items():
+            if o_std == 0:
+                z[name] = 0
+            else:
+                z[name] = abs(s-o_mean)/o_std
+
+        return z
+
+
     def prelim_filter(self, minreads=4, embed_minreads=1):
         passed = True
 
@@ -1159,8 +1177,9 @@ def process_cluster(cluster, inslib, outbase, args, noref_mode):
             use_reads = []
 
             if noref_mode:
-                for r in cluster.reads:
-                    use_reads.append(r.r_name)
+                for r_name, z in cluster.mapq_zscores().items():
+                    if abs(z) < 2:
+                        use_reads.append(r_name)
 
             else:
                 for r_name, z in cluster.te_overlap_zscores().items():
