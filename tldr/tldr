@@ -1642,16 +1642,6 @@ def main(args):
             logger.error("loading insertion library %s failed." % args.elts)
             sys.exit(1)
 
-    # parallelise cluster building across chromosomes
-    pool = mp.Pool(processes=int(args.procs))
-
-    reslist = []
-    for chrom in chroms:
-        res = pool.apply_async(build_clusters, [args, outbase, chrom])
-        reslist.append(res)
-
-    pickles = []
-
     if args.trdcol:
         if noref_mode:
             logger.warning('--trdcol with noref mode: transductions not meaningful without TE reference')
@@ -1662,10 +1652,29 @@ def main(args):
     table_out = open(outbase+'.table.txt', 'w')
     table_out.write('%s\n' % '\t'.join(header))
 
-    for res in reslist:
-        pickle_fn = res.get()
-        if pickle_fn is not None:
-            pickles.append(pickle_fn)
+    pool = mp.Pool(processes=int(args.procs))
+
+    pickles = []
+
+    if args.use_pickles:
+        assert os.path.exists(args.use_pickles)
+
+        for pickle_fn in os.listdir(args.use_pickles):
+            if pickle_fn.endswith('.pickle'):
+                pickles.append(args.use_pickles + '/' + pickle_fn)
+
+        logger.info('--use_pickles, found %d .pickle files in %s' % (len(pickles), args.use_pickles))
+
+    else:  # parallelise cluster building across chromosomes
+        reslist = []
+        for chrom in chroms:
+            res = pool.apply_async(build_clusters, [args, outbase, chrom])
+            reslist.append(res)
+
+        for res in reslist:
+            pickle_fn = res.get()
+            if pickle_fn is not None:
+                pickles.append(pickle_fn)
 
     for pickle_fn in pickles:
         clusters = []
@@ -1822,7 +1831,9 @@ def main(args):
             
             logger.info('finished %s. wrote %d records to %s' % (pickle_fn, c_count, outbase+'.table.txt'))
 
-            if not args.keep_pickles:
+            if args.keep_pickles or args.use_pickles:
+                logger.info('kept .pickle files in %s/' % outbase)
+            else:
                 os.remove(pickle_fn)
 
     table_out.close()
@@ -1851,5 +1862,6 @@ if __name__ == '__main__':
     parser.add_argument('--extend_consensus', default=0, help='if --detail_output option is enabled, extend output per-sample consensus by n bases (default 0)')
     parser.add_argument('--trdcol', action='store_true', default=False, help='add columns needed for transduction mapping')
     parser.add_argument('--keep_pickles', action='store_true', default=False, help='do not remove per-chromosome pickle files')
+    parser.add_argument('--use_pickles', default=None, help='use .pickle files in specified folder instead of building from scratch')
     args = parser.parse_args()
     main(args)
