@@ -1891,7 +1891,7 @@ def main(args):
             logger.info('finished %s. wrote %d records to %s' % (pickle_fn, c_count, outbase+'.table.txt'))
 
             if args.keep_pickles or args.use_pickles:
-                logger.info('kept .pickle files in %s/' % outbase)
+                logger.info('kept .pickle file %s' % pickle_fn)
             else:
                 os.remove(pickle_fn)
 
