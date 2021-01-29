@@ -572,15 +572,15 @@ class InsCluster:
 
         return z
 
-    def prelim_filter(self, minreads=4): # TODO passthrough params
+    def prelim_filter(self, minreads=4, embed_minreads=1):
         passed = True
 
         # minimum cluster size
-        if len(self.reads) < minreads:
+        if len(self.reads) < int(minreads):
             passed = False
 
         # require at least one fully embedded insertion
-        if len([r for r in self.reads if r.is_ins]) < 1:
+        if len([r for r in self.reads if r.is_ins]) < int(embed_minreads):
             passed = False
 
         return passed
@@ -1135,10 +1135,12 @@ def alter_ref(ins_ref, pileup, depth, te_align_count, min_alt_depth=3, min_alt_f
 
 def process_cluster(cluster, inslib, outbase, args, noref_mode):
     minreads = int(args.minreads)
+    embed_minreads = int(args.embed_minreads)
+
     te_lib = args.elts
     ref = pysam.Fastafile(args.ref)
 
-    if cluster.prelim_filter(minreads=minreads):
+    if cluster.prelim_filter(minreads=minreads, embed_minreads=embed_minreads):
         logger.debug('processing cluster %s, length: %d' % (cluster.uuid, len(cluster)))
         cluster.trim_reads(int(args.flanksize))
 
@@ -1846,6 +1848,7 @@ if __name__ == '__main__':
     parser.add_argument('-r', '--ref', help='reference fasta (samtools faidx indexed) or "none" for no TE ref mode', required=True)
     parser.add_argument('-p', '--procs', help='process count', default=1)
     parser.add_argument('-m', '--minreads', default=3, help='minimum read count to form cluster (default = 3)')
+    parser.add_argument('--embed_minreads', default=1, help='minimum number of reads completely embedding insertion (default = 1)')
     parser.add_argument('-o', '--outbase', default=None, help='base name for output files (defaults to bam name(s)')
     parser.add_argument('-c', '--chroms', default=None, help='limit to chromsomes in file')
     parser.add_argument('--max_te_len', default=10000, help='maximum insertion size (default = 10000)')
