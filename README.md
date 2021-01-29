@@ -66,29 +66,48 @@ tldr -b aligned_reads.bam -e /path/to/tldr/ref/teref.ont.human.fa -r /path/to/mi
 
 ## Command-line Options
 
-### multiple .bam files
+### -b/--bams
 Multiple .bam files can provided in a comma-delimited list.
 
-### -o/--outbase
-Specify a base name for output files. The default is to use the name of the input bam(s) without the .bam extension and joined with "_" if > 1 .bam file given
+### -e/--elts
+Reference elements in .fasta format. The header for each should be formatted as`>Superfamily:Subfamily` e.g. `>ALU:AluYb9`.
+If `none` is specifed instead of a filename, tldr will run without a reference TE collection. This is useful for genomes where active mobile element content is not well understood or for unbiased identification of inserted sequenced and is also useful for identifying viral intregration and gene retrocopy insertions.
+
+### -r/--ref
+Reference genome .fasta, expects a samtools index i.e. `samtools faidx`.
 
 ### -p/--procs
 Spread work over _p_ processes. Uses python multiprocessing.
 
-### -n/--nonref
-Annotate insertion with known non-reference insertion sites (examples provided in `/path/to/tldr/ref`)
+### -m/--minreads
+Minimum supporting read count to trigger a consensus / insertion call (default = 3)
+
+### --embed_minreads
+Minimum number of reads completely embeddeding the insertion (default = 1, requires at least 1).
+
+### -o/--outbase
+Specify a base name for output files. The default is to use the name of the input bam(s) without the .bam extension and joined with "_" if > 1 .bam file given
 
 ### -c/--chroms
 Specify a text file of chromosome names (one per line) and tldr will focus only on these.
 
-### -m/--minreads
-Minimum supporting read count to trigger a consensus / insertion call (default = 3)
-
 ### --max_te_len
-Maximum insertion size (default = 7000)
+Maximum insertion size (default = 10000)
 
 ### --min_te_len
 Minimum insertion size (default = 200)
+
+### --min_alt_frac
+Parameter for allowing base changes in consensus cleanup (default = 0.5)
+
+### --min_alt_depth
+Parameter for allowing base changes in consensus cleanup (default = 3)
+
+### --min_total_depth_frac
+Parameter for allowing base changes in consensus cleanup (default = 0.25)
+
+### --max_cluster_size
+Limit cluster size and downsample clusters larger than the cutoff (default = no limit). Downsampling is biased such that reads completely embedding the inserted sequence are preferred.
 
 ### --wiggle
 Allows for sloppy breakpoints in initial breakpoint search (default = 50)
@@ -96,18 +115,28 @@ Allows for sloppy breakpoints in initial breakpoint search (default = 50)
 ### --flanksize
 Trim reads to contain at most `--flanksize` bases on either side of the insertion. Setting too large makes consensus building slower and more error-prone.
 
-### --mafft_threads
-Number of threads to give each mafft job (consensus building)
+### -n/--nonref
+Annotate insertion with known non-reference insertion sites (examples provided in `/path/to/tldr/ref`
 
 ### --color_consensus
 This will annotate the consensus sequence with ANSI escape characters that yield coloured text on the command-line:
 red = TSD, blue = TE insertion sequence, yellow = non-TE insertion sequence
+While this looks nice on the command line (try `less -R`) and is helpful for evaluating insertion calls, the output may not translate well to other applications as the escape sequences for the ANSI colours will be embedded in the sequence.
 
 ### --detail_output
 Creates a directory (name is the output base name) with extended consensus sequences, per-insertion read mapping information and per-insertion .bam files. Required for mCpG analysis.
 
 ### --extend_consensus
 If --detail_output option is enabled, extend output per-sample consensus by n bases (default 0). This is useful in the analysis of CpG methylation to add context on either end of the insertion.
+
+### --trdcol
+Adds 5' and 3' transduction columns needed by the `call_transductions.py` script, if you're into that kind of thing.
+
+### --keep_pickles
+Saves pickles for later.
+
+### --use_pickles <folder>
+Search specified folder for .pickle files and use them instead of clustering reads. Faster for re-running with different options, requires `--keep_pickles`.
 
 ## Output
 
