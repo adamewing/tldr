@@ -1196,7 +1196,7 @@ def process_cluster(cluster, inslib, outbase, args, noref_mode):
         if max_cluster_size:
             if len(cluster) > max_cluster_size:
                 cluster = cluster.downsample(max_cluster_size)
-                logger.info('downsampled cluster %s to %d reads' % (cluster.uuid, max_cluster_size))
+                logger.debug('downsampled cluster %s to %d reads' % (cluster.uuid, max_cluster_size))
 
         cluster.trim_reads(int(args.flanksize))
 
