@@ -1901,8 +1901,8 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Find TE insertions in ONT data')
     parser.add_argument('-b', '--bams', required=True, help='comma seperated bam list')
-    parser.add_argument('-e', '--elts', help='reference elements .fa', required=True)
-    parser.add_argument('-r', '--ref', help='reference fasta (samtools faidx indexed) or "none" for no TE ref mode', required=True)
+    parser.add_argument('-e', '--elts', help='reference elements .fa or "none" for no TE ref mode', required=True)
+    parser.add_argument('-r', '--ref', help='reference fasta (samtools faidx indexed)', required=True)
     parser.add_argument('-p', '--procs', help='process count', default=1)
     parser.add_argument('-m', '--minreads', default=3, help='minimum read count to form cluster (default = 3)')
     parser.add_argument('--embed_minreads', default=1, help='minimum number of reads completely embedding insertion (default = 1)')
