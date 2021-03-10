@@ -120,15 +120,16 @@ def sorted_unmapped_segments(seq):
 
 
 def main(args):
-    teont_table = pd.read_csv(args.table, sep='\t', header=0, index_col=0)
+    tldr_table = pd.read_csv(args.table, sep='\t', header=0, index_col=0)
 
-    teont_dir = None
-    if args.teont_dir is None:
-        teont_dir = '.'.join(args.table.split('.')[:-2])
+    tldr_dir = args.tldr_dir
+
+    if tldr_dir is None:
+        tldr_dir = '.'.join(args.table.split('.')[:-2])
 
     samples = []
 
-    for sample_calls in teont_table['SampleReads']:
+    for sample_calls in tldr_table['SampleReads']:
         for sample_c in sample_calls.split(','):
             samples.append(sample_c.split('|')[0])
 
@@ -137,13 +138,13 @@ def main(args):
     meth_table = dd(dict)
     meth_output = dd(dict)
 
-    assert os.path.exists(teont_dir)
+    assert os.path.exists(tldr_dir)
 
 
-    for uuid in teont_table.index:
-        ins = teont_table.loc[uuid]
+    for uuid in tldr_table.index:
+        ins = tldr_table.loc[uuid]
 
-        cons_fa = teont_dir + '/' + uuid + '.cons.ref.fa'
+        cons_fa = tldr_dir + '/' + uuid + '.cons.ref.fa'
 
         if not os.path.exists(cons_fa):
             continue
@@ -152,8 +153,8 @@ def main(args):
         cons_seq = cons_dict[uuid]
 
         for sample in samples:
-            bam_fn = teont_dir + '/' + sample + '.' + uuid + '.te.bam'
-            meth_fn = teont_dir + '/' + sample + '.' + uuid + '.te.meth.tsv.gz'
+            bam_fn = tldr_dir + '/' + sample + '.' + uuid + '.te.bam'
+            meth_fn = tldr_dir + '/' + sample + '.' + uuid + '.te.meth.tsv.gz'
 
             meth_table[uuid][sample] = [0,0,0] # meth, unmeth, no_call
 
@@ -265,8 +266,8 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='giant bucket')
-    parser.add_argument('-t', '--table', required=True, help='teont table')
-    parser.add_argument('-d', '--teont_dir', default=None)
+    parser.add_argument('-t', '--table', required=True, help='tldr table')
+    parser.add_argument('-d', '--tldr_dir', default=None)
     parser.add_argument('-c', '--cutoff', default=2.5, help='llr cutoff (absolute value), default=2.5')
     parser.add_argument('--keep_tmp_table', action='store_true', default=False)
     parser.add_argument('--ignore_tags', action='store_true', default=True)

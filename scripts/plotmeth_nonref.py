@@ -324,13 +324,14 @@ def sorted_unmapped_segments(seq):
 
 
 def main(args):
-    teont_table = pd.read_csv(args.table, sep='\t', header=0, index_col=0)
+    tldr_table = pd.read_csv(args.table, sep='\t', header=0, index_col=0)
 
-    teont_dir = None
-    if args.teont_dir is None:
-        teont_dir = '.'.join(args.table.split('.')[:-2])
+    tldr_dir = args.tldr_dir
 
-    cons_fa = teont_dir + '/' + args.uuid + '.cons.ref.fa'
+    if tldr_dir is None:
+        tldr_dir = '.'.join(args.table.split('.')[:-2])
+
+    cons_fa = tldr_dir + '/' + args.uuid + '.cons.ref.fa'
     cons_dict = load_falib(cons_fa)
     cons_seq = cons_dict[args.uuid]
 
@@ -342,15 +343,15 @@ def main(args):
 
         sample_order.append(sample)
 
-        bam_fn = teont_dir + '/' + sample + '.' + args.uuid + '.te.bam'
-        meth_fn = teont_dir + '/' + sample + '.' + args.uuid + '.te.meth.tsv.gz'
+        bam_fn = tldr_dir + '/' + sample + '.' + args.uuid + '.te.bam'
+        meth_fn = tldr_dir + '/' + sample + '.' + args.uuid + '.te.meth.tsv.gz'
 
-        assert os.path.exists(teont_dir)
+        assert os.path.exists(tldr_dir)
         assert os.path.exists(bam_fn), 'not found: %s' % bam_fn
         assert os.path.exists(meth_fn), 'not found: %s' % meth_fn
-        assert args.uuid in teont_table.index
+        assert args.uuid in tldr_table.index
 
-        ins = teont_table.loc[args.uuid]
+        ins = tldr_table.loc[args.uuid]
         elt_strand = ins['Strand']
 
         chrom = args.uuid
@@ -677,8 +678,8 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='giant bucket')
     parser.add_argument('-g', '--gtf', default=None, help='genes or intervals to display in gtf format')
-    parser.add_argument('-t', '--table', required=True, help='teont table')
-    parser.add_argument('-d', '--teont_dir', default=None)
+    parser.add_argument('-t', '--table', required=True, help='tldr table')
+    parser.add_argument('-d', '--tldr_dir', default=None)
     parser.add_argument('-u', '--uuid', required=True, help='target UUID')
     parser.add_argument('-s', '--sample', required=True)
     parser.add_argument('-c', '--cutoff', default=2.5, help='llr cutoff (absolute value), default=2.5')
