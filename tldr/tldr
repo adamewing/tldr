@@ -705,6 +705,19 @@ class AlignmentGroup:
     def best_match(self):
         return max([a.match for a in self.alignments])
 
+    def avg_match(self):
+        m = 0.0
+        l = 0
+
+        for a in self.alignments:
+            l += abs(a.tgt_end-a.tgt_start)
+            m += l*a.match
+        
+        if l == 0:
+            return 0.0
+
+        return m/l
+
     def min_qry_coord(self):
         return min([a.qry_start for a in self.alignments])
 
@@ -1465,13 +1478,33 @@ def build_clusters(args, outbase, chrom):
     ins_forest = dd(Intersecter)
     clusters = dict()
 
+    targets = None
+    if args.targets is not None:
+        targets = Intersecter()
+
+        with open(args.targets) as target_bed:
+            for line in target_bed:
+                tf_chr, tf_start, tf_end = line.strip().split()[:3]
+                tf_start = int(tf_start)
+                tf_end   = int(tf_end)
+                if tf_chr == chrom:
+                    targets.add_interval(Interval(tf_start-wiggle, tf_end+wiggle))
+
     for bam in bams:
 
         for read in bam.fetch(contig=chrom):
             if read.is_secondary or read.is_supplementary:
                 continue
 
-            b = 0
+            if targets is not None:
+                target_in_read = False
+                for tf_rec in targets.find(read.reference_start, read.reference_end):
+                    target_in_read = True
+
+                if not target_in_read:  # ignore reads that don't cover targets if --targets is used
+                    continue
+
+            b = 0  # query position within read
 
             for cig in read.cigartuples:
                 if cig[1] > min_te_len and cig[0] in (1,4): # insertion or soft clip in read
@@ -1506,6 +1539,15 @@ def build_clusters(args, outbase, chrom):
                     if r_pos is None:
                         logger.debug('skip read warning: %s' % read.qname)
                         continue
+
+                    if targets is not None:
+                        tf_found = False
+                        for tf_rec in targets.find(r_pos-wiggle, r_pos+wiggle):
+                            tf_found = True
+                        
+                        # skip site if not in target list
+                        if not tf_found:
+                            continue
 
                     r_start = None
                     r_end = None
@@ -1565,7 +1607,7 @@ def build_clusters(args, outbase, chrom):
     return None
 
 
-def assign_filter(output, c_unmap, args, noref_mode):
+def assign_filter(output, c_unmap, args, noref_mode, cluster_forest):
     filters = []
 
     left_flank_len = c_unmap[0]
@@ -1607,6 +1649,11 @@ def assign_filter(output, c_unmap, args, noref_mode):
     if int(output['MedianMapQ']) == 0:
         filters.append('ZeroMapQ')
 
+    for c in cluster_forest[output['Chrom']].find(int(output['Start']), int(output['End'])):
+        if c.value.uuid != output['UUID']:
+            if int(output['UsedReads']) < c.value.te_useable_count():
+                filters.append('Duplicate')
+
     if len(filters) > 0:
         return ','.join(filters)
     
@@ -1627,6 +1674,7 @@ header = [
 'Inversion',
 'UnmapCover',
 'MedianMapQ',
+'TEMatch',
 'UsedReads',
 'SpanReads',
 'NumSamples',
@@ -1761,6 +1809,12 @@ def main(args):
 
             c_count = 0
 
+            cluster_forest = dd(Intersecter)
+
+            for cluster in processed_clusters:
+                if cluster and cluster.cons:
+                    cluster_forest[cluster.chrom()].add_interval(Interval(int(cluster.breakpoints[0]), int(cluster.breakpoints[1]), value=cluster))
+
             for cluster in processed_clusters:
                 if cluster and cluster.cons:
 
@@ -1808,6 +1862,7 @@ def main(args):
                     output['Inversion']   = cluster.detect_inversion()
                     output['UnmapCover']  = unmap_cover
                     output['MedianMapQ']  = cluster.te_median_mapq()
+                    output['TEMatch']     = cluster.cons_te_align.avg_match()
                     output['UsedReads']   = cluster.te_useable_count()
                     output['SpanReads']   = cluster.te_embedded_count()
                     output['NumSamples']  = cluster.te_samples()
@@ -1817,7 +1872,7 @@ def main(args):
                     output['Consensus']   = cluster.cons
                     output['Phasing']     = cluster.phase()
                     output['Remappable']  = cluster.breakpoints_remappable
-                    output['Filter']      = assign_filter(output, c_unmap, args, noref_mode)
+                    output['Filter']      = assign_filter(output, c_unmap, args, noref_mode, cluster_forest)
 
                     detail = od()
 
@@ -1908,6 +1963,7 @@ if __name__ == '__main__':
     parser.add_argument('--embed_minreads', default=1, help='minimum number of reads completely embedding insertion (default = 1)')
     parser.add_argument('-o', '--outbase', default=None, help='base name for output files (defaults to bam name(s)')
     parser.add_argument('-c', '--chroms', default=None, help='limit to chromsomes in file')
+    parser.add_argument('--targets', default=None, help='focus only on targets in file (BED-3)')
     parser.add_argument('--max_te_len', default=10000, help='maximum insertion size (default = 10000)')
     parser.add_argument('--min_te_len', default=200, help='minimum insertion size (default = 200)')
     parser.add_argument('--min_alt_frac', default=0.5, help='parameter for base changes in consensus cleanup (defult=0.5)')
