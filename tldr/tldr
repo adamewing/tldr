@@ -758,7 +758,7 @@ class AlignmentGroup:
 
         for a in self.alignments:
             l += abs(a.tgt_end-a.tgt_start)
-            m += l*a.match
+            m += abs(a.tgt_end-a.tgt_start)*a.match
         
         if l == 0:
             return 0.0

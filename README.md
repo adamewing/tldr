@@ -154,6 +154,12 @@ Internal inversion detected in TE
 ### UnmapCover
 Fraction of inserted sequence covered by TE sequence
 
+### MedianMapQ
+Median mapping quality score from input .bam(s)
+
+### TEMatch
+Overall mean identity to TE in reference library (`-e/--elts`)
+
 ### UsedReads
 Number of reads used in consensus generation
 
@@ -165,6 +171,9 @@ Number of samples (.bam files) in which the insertion was detected
 
 ### SampleReads
 Per-sample accounting of supporting reads
+
+### EmptyReads
+Number of reads spanning both TSDs +/- `--wiggle` parameter with no evidence for insertion, useful for inferring genotype
 
 ### NonRef
 If `-n/--nonref` given, annotate whether insertion is a known non-reference insertion ("NA" otherwise)
