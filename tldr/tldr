@@ -242,6 +242,7 @@ class InsCluster:
         self.breakpoints = []
         self.breakpoints_remappable = False
         self.tsd_seq = 'NA'
+        self.empty_reads = dd(int)
 
     def add(self, read, flanksize=200):
         self.reads.append(read)
@@ -360,7 +361,6 @@ class InsCluster:
     def te_median_mapq(self):
         return np.median([read.r_mapq for read in self.reads if read.useable])
 
-
     def te_useable_count(self):
         return len([read for read in self.reads if read.useable])
 
@@ -379,6 +379,53 @@ class InsCluster:
             return False
 
         return self.cons_te_align.max_qry_orient() != self.cons_te_align.min_qry_orient()
+
+    def spanning_non_supporting_reads(self, wiggle, min_te_len, cov_pct=.95):
+        read_names = set([read.r_name for read in self.reads if read.useable])
+
+        for bampath in set([read.bampath for read in self.reads if read.useable]):
+            bamname = '.'.join(os.path.basename(bampath).split('.')[:-1])
+            bam = pysam.AlignmentFile(bampath)
+
+            te_ins_start = int(self.breakpoints[0])
+            te_ins_end   = int(self.breakpoints[1])
+
+            for r in bam.fetch(self.chrom(), te_ins_start, te_ins_end):
+                if r.is_secondary or r.is_supplementary:
+                    continue
+
+                if r.qname in read_names:
+                    continue
+            
+                cov = 0
+                gap = 0
+                in_region = False
+
+                for ap in r.get_aligned_pairs(matches_only=False):
+                    if not in_region and ap[1] is None:
+                        continue
+
+                    if in_region:
+                        if ap[1] is None:
+                            gap += 1
+                            continue
+                        else:
+                            cov += 1
+
+                    if ap[1] > te_ins_start-wiggle:
+                        in_region = True
+                        
+                    if ap[1] > te_ins_end+wiggle:
+                        in_region = False
+
+                if gap < min_te_len and float(cov) > ((te_ins_end-te_ins_start)+(wiggle*2))*cov_pct:
+                    self.empty_reads[bamname] += 1
+
+    def empty_reads_count(self):
+        if len(self.empty_reads) == 0:
+            return 'NA'
+
+        return ','.join(['|'.join(map(str, k)) for k in self.empty_reads.items()])
 
     def trim_reads(self, flanksize=200):
         for read in self.reads:
@@ -1457,6 +1504,8 @@ def process_cluster(cluster, inslib, outbase, args, noref_mode):
                         te_outbam = minimap2_bam(cons_out_fa, per_bam_fq, '%s/%s.%s.te.bam' % (outbase, sample, cluster.uuid))
                         os.remove(per_bam_fq)
 
+                cluster.spanning_non_supporting_reads(int(args.wiggle), int(args.min_te_len))
+
             else:
                 pass
                 # TODO: add "warnings" to cluster
@@ -1679,6 +1728,7 @@ header = [
 'SpanReads',
 'NumSamples',
 'SampleReads',
+'EmptyReads',
 'NonRef',
 'TSD',
 'Consensus',
@@ -1867,6 +1917,7 @@ def main(args):
                     output['SpanReads']   = cluster.te_embedded_count()
                     output['NumSamples']  = cluster.te_samples()
                     output['SampleReads'] = cluster.te_sample_count()
+                    output['EmptyReads']  = cluster.empty_reads_count()
                     output['NonRef']      = nr
                     output['TSD']         = cluster.tsd_seq
                     output['Consensus']   = cluster.cons
