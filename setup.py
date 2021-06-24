@@ -61,7 +61,7 @@ if __name__ == '__main__':
 
 setup(
     name='tldr',
-    version='1.2',
+    version='1.2.1',
     author='Adam Ewing',
     author_email='adam.ewing@gmail.com',
     description=("Insertion finder for long noisy reads"),

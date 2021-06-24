@@ -374,6 +374,12 @@ class InsCluster:
         sample_count = Counter([read.bamname for read in self.reads if read.useable])
         return ','.join(['|'.join(map(str, k)) for k in sample_count.items()])
 
+    def te_match(self):
+        if self.cons_te_align is None:
+            return 0.0
+        
+        return self.cons_te_align.avg_match()
+
     def detect_inversion(self):
         if self.cons_te_align is None:
             return False
@@ -1912,7 +1918,7 @@ def main(args):
                     output['Inversion']   = cluster.detect_inversion()
                     output['UnmapCover']  = unmap_cover
                     output['MedianMapQ']  = cluster.te_median_mapq()
-                    output['TEMatch']     = cluster.cons_te_align.avg_match()
+                    output['TEMatch']     = cluster.te_match()
                     output['UsedReads']   = cluster.te_useable_count()
                     output['SpanReads']   = cluster.te_embedded_count()
                     output['NumSamples']  = cluster.te_samples()
