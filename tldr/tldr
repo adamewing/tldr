@@ -1657,13 +1657,7 @@ def build_clusters(args, outbase, chrom):
         with open(pickle_fn, 'wb') as p_out:
             pickle.dump(clusters, p_out)
 
-        del clusters
-        gc.collect()
-
         return pickle_fn
-
-    del clusters
-    gc.collect()
 
     return None
 
