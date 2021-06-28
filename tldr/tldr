@@ -1705,8 +1705,8 @@ def assign_filter(output, c_unmap, args, noref_mode, cluster_forest):
         filters.append('ZeroMapQ')
 
     for c in cluster_forest[output['Chrom']].find(int(output['Start']), int(output['End'])):
-        if c.value.uuid != output['UUID']:
-            if int(output['UsedReads']) < c.value.te_useable_count():
+        if c.value['UUID'] != output['UUID']:
+            if int(output['UsedReads']) < c.value['UsedReads']:
                 filters.append('Duplicate')
 
     if len(filters) > 0:
@@ -1869,7 +1869,10 @@ def main(args):
 
             for cluster in processed_clusters:
                 if cluster and cluster.cons:
-                    cluster_forest[cluster.chrom()].add_interval(Interval(int(cluster.breakpoints[0]), int(cluster.breakpoints[1]), value=cluster))
+                    cinfo = {}
+                    cinfo['UUID'] = cluster.uuid
+                    cinfo['UsedReads'] = cluster.te_useable_count()
+                    cluster_forest[cluster.chrom()].add_interval(Interval(int(cluster.breakpoints[0]), int(cluster.breakpoints[1]), value=cinfo))
 
             for cluster in processed_clusters:
                 if cluster and cluster.cons:
