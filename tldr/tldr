@@ -1867,6 +1867,8 @@ def main(args):
 
             cluster_forest = dd(Intersecter)
 
+            logger.debug('build interval trees for duplicate searching...')
+
             for cluster in processed_clusters:
                 if cluster and cluster.cons:
                     cinfo = {}
@@ -1877,9 +1879,12 @@ def main(args):
             for cluster in processed_clusters:
                 if cluster and cluster.cons:
 
+                    logger.debug('start output processing of cluster %s (%d of %d)' % (cluster.uuid, c_count, len(processed_clusters)))
+
                     nr = 'NA'
 
                     if nonref:
+                        logger.debug('nonref check cluster %s' % cluster.uuid)
                         ins_start, ins_end = cluster.interval()
 
                         if ins_start < 0:
@@ -1889,9 +1894,10 @@ def main(args):
                             for nr in nonref.fetch(cluster.chrom(), ins_start, ins_end):
                                 nr = '_'.join(nr.strip().split())
 
+                    logger.debug('sorted_unmapped_segments cluster %s' % cluster.uuid)
                     c_unmap = cluster.sorted_unmapped_segments()[0]
 
-                    logger.debug('%s alignment group:\n%s' % (cluster.uuid, str(cluster.cons_te_align)))
+                    logger.debug('output %s alignment group:\n%s' % (cluster.uuid, str(cluster.cons_te_align)))
 
                     start_te    = 'NA'
                     end_te      = 'NA'
@@ -2000,6 +2006,9 @@ def main(args):
                         output['Consensus'] = cluster.cons[:c_unmap[0]-tsd_len]+tsd_1+C_YELLOW+col_seg+C_END+tsd_2+cluster.cons[c_unmap[1]+tsd_len:]
 
                     table_out.write('%s\n' % '\t'.join(map(str, [output[col] for col in header])))
+
+                    logger.debug('finish output cluster %d of %d' % (c_count, len(processed_clusters)))
+
                     c_count += 1
 
             
