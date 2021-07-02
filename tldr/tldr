@@ -897,7 +897,7 @@ def load_falib(infa):
                         if b in ['A','C','G','T','N']:
                             checkseq.append(b)
                         else:
-                            logger.warning('base in %s, id %s, not in (A,C,T,G,N): %s. Changed to "N"' % (infa, seqid, b))
+                            logger.debug('base in %s, id %s, not in (A,C,T,G,N): %s. Changed to "N"' % (infa, seqid, b))
                             checkseq.append('N')
 
                     seq = ''.join(checkseq)
@@ -1271,8 +1271,6 @@ def process_cluster(cluster, inslib, outbase, args, noref_mode):
             if te:
                 insread.te_info(te)
 
-            logger.debug('cluster %s, alignment group:\n%s' % (cluster.uuid, str(te)))
-
         if cluster.te_align_count() >= minreads or noref_mode:
             major_family = cluster.te_major_family()
             major_subfam = cluster.te_major_subfam()
@@ -1540,13 +1538,15 @@ def build_clusters(args, outbase, chrom):
         with open(args.targets) as target_bed:
             for line in target_bed:
                 tf_chr, tf_start, tf_end = line.strip().split()[:3]
-                tf_start = int(tf_start)
-                tf_end   = int(tf_end)
+                tf_start = int(tf_start)-wiggle
+                tf_end   = int(tf_end)+wiggle
+                if tf_start == tf_end:
+                    tf_end += 1
+
                 if tf_chr == chrom:
-                    targets.add_interval(Interval(tf_start-wiggle, tf_end+wiggle))
+                    targets.add_interval(Interval(tf_start, tf_end))
 
     for bam in bams:
-
         for read in bam.fetch(contig=chrom):
             if read.is_secondary or read.is_supplementary:
                 continue
@@ -1556,7 +1556,8 @@ def build_clusters(args, outbase, chrom):
                 for tf_rec in targets.find(read.reference_start, read.reference_end):
                     target_in_read = True
 
-                if not target_in_read:  # ignore reads that don't cover targets if --targets is used
+                if not target_in_read:
+                    logger.debug('ignore read %s due to --targets' % read.qname)
                     continue
 
             b = 0  # query position within read
@@ -1594,15 +1595,6 @@ def build_clusters(args, outbase, chrom):
                     if r_pos is None:
                         logger.debug('skip read warning: %s' % read.qname)
                         continue
-
-                    if targets is not None:
-                        tf_found = False
-                        for tf_rec in targets.find(r_pos-wiggle, r_pos+wiggle):
-                            tf_found = True
-                        
-                        # skip site if not in target list
-                        if not tf_found:
-                            continue
 
                     r_start = None
                     r_end = None
@@ -1815,6 +1807,23 @@ def main(args):
     table_out = open(outbase+'.table.txt', 'w')
     table_out.write('%s\n' % '\t'.join(header))
 
+    targets = None
+
+    if args.targets is not None:
+        targets = dd(Intersecter)
+
+        with open(args.targets) as target_bed:
+            for line in target_bed:
+                tf_chr, tf_start, tf_end = line.strip().split()[:3]
+                tf_start = int(tf_start)-int(args.wiggle)
+                tf_end   = int(tf_end)+int(args.wiggle)
+
+                if tf_end == tf_start:
+                    logger.warning('record in --targets has length 0 (%s) incremeted end +1' % line.strip())
+                    tf_end += 1
+
+                targets[tf_chr].add_interval(Interval(tf_start, tf_end))
+
     pool = mp.Pool(processes=int(args.procs))
 
     pickles = []
@@ -1864,6 +1873,7 @@ def main(args):
                 processed_clusters.append(res.get())
 
             c_count = 0
+            c_tot = 1
 
             cluster_forest = dd(Intersecter)
 
@@ -1879,7 +1889,18 @@ def main(args):
             for cluster in processed_clusters:
                 if cluster and cluster.cons:
 
-                    logger.debug('start output processing of cluster %s (%d of %d)' % (cluster.uuid, c_count, len(processed_clusters)))
+                    if targets is not None:
+                        in_targets = False
+                        
+                        for rec in targets[cluster.chrom()].find(int(cluster.breakpoints[0]), int(cluster.breakpoints[1])):
+                            in_targets = True
+
+                        if not in_targets:
+                            logger.debug('cluster %s (%d of %d) skipped, not in --targets' % (cluster.uuid, c_tot, len(processed_clusters)))
+                            c_tot += 1
+                            continue
+
+                    logger.debug('start output processing of cluster %s (%d of %d)' % (cluster.uuid, c_tot, len(processed_clusters)))
 
                     nr = 'NA'
 
@@ -1896,8 +1917,6 @@ def main(args):
 
                     logger.debug('sorted_unmapped_segments cluster %s' % cluster.uuid)
                     c_unmap = cluster.sorted_unmapped_segments()[0]
-
-                    logger.debug('output %s alignment group:\n%s' % (cluster.uuid, str(cluster.cons_te_align)))
 
                     start_te    = 'NA'
                     end_te      = 'NA'
@@ -2007,11 +2026,18 @@ def main(args):
 
                     table_out.write('%s\n' % '\t'.join(map(str, [output[col] for col in header])))
 
-                    logger.debug('finish output cluster %d of %d' % (c_count, len(processed_clusters)))
+                    logger.debug('finish output cluster %d of %d' % (c_tot, len(processed_clusters)))
 
                     c_count += 1
+                    c_tot += 1
 
-            
+                else:
+                    if cluster is None:
+                        logger.debug('skipped empty cluster (%d of %d)' % (c_tot, len(processed_clusters)))
+                    else:
+                        logger.debug('skipped unusable cluster %s (%d of %d)' % (cluster.uuid, c_tot, len(processed_clusters)))
+                    c_tot += 1
+
             logger.info('finished %s. wrote %d records to %s' % (pickle_fn, c_count, outbase+'.table.txt'))
 
             if args.keep_pickles or args.use_pickles:
@@ -2025,7 +2051,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Find TE insertions in ONT data')
 
-    __version__ = "1.2.1"
+    __version__ = "1.2.2"
     parser.add_argument('-v', '--version', action='version', version='%(prog)s {version}'.format(version=__version__))
 
     parser.add_argument('-b', '--bams', required=True, help='comma seperated bam list')
