@@ -1918,6 +1918,11 @@ def main(args):
 
             for cluster in processed_clusters:
                 if cluster and cluster.cons:
+                    tracking = False
+
+                    if args.trackread and args.trackread in [read.r_name for read in cluster.reads]:
+                        logger.debug('found tracked read %s in output candidate cluster %s' % (args.trackread, cluster.uuid))
+                        tracking = True
 
                     if targets is not None:
                         in_targets = False
@@ -1928,6 +1933,9 @@ def main(args):
                         if not in_targets:
                             logger.debug('cluster %s (%d of %d) skipped, not in --targets' % (cluster.uuid, c_tot, len(processed_clusters)))
                             c_tot += 1
+
+                            if tracking:
+                                logger.debug('tracked read %s in dropped cluster %s (--targets)' % (args.trackread, cluster.uuid))
                             continue
 
                     logger.debug('start output processing of cluster %s (%d of %d)' % (cluster.uuid, c_tot, len(processed_clusters)))
@@ -2066,6 +2074,8 @@ def main(args):
                         logger.debug('skipped empty cluster (%d of %d)' % (c_tot, len(processed_clusters)))
                     else:
                         logger.debug('skipped unusable cluster %s (%d of %d)' % (cluster.uuid, c_tot, len(processed_clusters)))
+                        if args.trackread and args.trackread in [read.r_name for read in cluster.reads]:
+                            logger.debug('tracked read %s was in unusable cluster %s (no consensus)' % (args.trackread, cluster.uuid))
                     c_tot += 1
 
             logger.info('finished %s. wrote %d records to %s' % (pickle_fn, c_count, outbase+'.table.txt'))
