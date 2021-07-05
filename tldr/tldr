@@ -1557,7 +1557,6 @@ def build_clusters(args, outbase, chrom):
                     target_in_read = True
 
                 if not target_in_read:
-                    logger.debug('ignore read %s due to --targets' % read.qname)
                     continue
 
             b = 0  # query position within read
