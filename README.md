@@ -40,6 +40,7 @@ conda install -c bioconda mafft
 
 For manual installation see the [mafft website](https://mafft.cbrc.jp/alignment/software/linux.html)
 
+Note: different versions of MAFFT may yield different results from tldr. We currently recommend MAFFT v7.480.
 
 ## Exonerate
 Via conda:
