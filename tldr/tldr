@@ -1854,6 +1854,10 @@ def main(args):
 
                 targets[tf_chr].add_interval(Interval(tf_start, tf_end))
 
+    if targets is not None:
+        chroms = list(targets.keys())
+        logger.info('searching chromosomes represented in --targets: %s' % ','.join(chroms))
+
     pool = mp.Pool(processes=int(args.procs))
 
     pickles = []
