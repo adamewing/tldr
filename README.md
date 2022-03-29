@@ -7,7 +7,26 @@
 # Installation
 
 tldr requires python > 3.6 and has the following dependencies:
+- HTSLIB/Samtools
+- minimap2
+- MAFFT
+- Exonerate
+- some python dependecies in the background. 
 
+## One-step Conda environment setup 
+There is a pre-baked Conda environment file provided (tldr.yml) that can be used to create a tldr Conda environment with all of the necessary dependencies. 
+
+```
+git clone https://github.com/adamewing/tldr.git
+cd tldr
+conda env create -f tldr.yml
+conda activate tldr
+python setup.py install
+tldr -h
+```
+If you use the above method, make sure to activate the Conda environment first with `conda activate tldr` whenever using tldr.
+
+## Installing dependencies seperately
 ## HTSLIB / SAMtools
 Easiest method is via conda:
 
