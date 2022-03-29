@@ -17,10 +17,10 @@ tldr requires python > 3.6 and has the following dependencies:
 There is a pre-baked Conda environment file provided (tldr.yml) that can be used to create a tldr Conda environment with all of the necessary dependencies. 
 
 ```
-conda env create -f tldr.yml
-conda activate tldr
 git clone https://github.com/adamewing/tldr.git
 cd tldr
+conda env create -f tldr.yml
+conda activate tldr
 python setup.py install
 tldr -h
 ```
