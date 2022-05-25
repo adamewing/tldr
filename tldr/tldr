@@ -1520,6 +1520,10 @@ def process_cluster(cluster, inslib, outbase, args, noref_mode):
                                     seq = read.seq
                                     qual = read.qual
 
+                                    if None in (seq, qual):
+                                        logger.warning('skipped a read without seq/qual: %s' % read.qname)
+                                        continue
+
                                     if read.is_reverse:
                                         seq = rc(seq)
                                         qual = qual[::-1]
