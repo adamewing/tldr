@@ -14,7 +14,7 @@ tldr requires python > 3.6 and has the following dependencies:
 - some python dependecies in the background. 
 
 ## One-step Conda environment setup 
-There is a pre-baked Conda environment file provided (tldr.yml) that can be used to create a tldr Conda environment with all of the necessary dependencies. 
+There is a pre-baked Conda (or [mamba](https://anaconda.org/conda-forge/mamba)) environment file provided (tldr.yml) that can be used to create a tldr Conda environment with all of the necessary dependencies. 
 
 ```
 git clone https://github.com/adamewing/tldr.git
