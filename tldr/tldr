@@ -399,6 +399,9 @@ class InsCluster:
             te_ins_start = int(self.breakpoints[0])
             te_ins_end   = int(self.breakpoints[1])
 
+            if te_ins_start < 0:
+                te_ins_start = 0
+
             for r in bam.fetch(self.chrom(), te_ins_start, te_ins_end):
                 if r.is_secondary or r.is_supplementary:
                     continue
