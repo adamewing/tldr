@@ -402,6 +402,9 @@ class InsCluster:
             if te_ins_start < 0:
                 te_ins_start = 0
 
+            if te_ins_end < 0:
+                te_ins_end = 0
+
             for r in bam.fetch(self.chrom(), te_ins_start, te_ins_end):
                 if r.is_secondary or r.is_supplementary:
                     continue
@@ -1375,6 +1378,9 @@ def process_cluster(cluster, inslib, outbase, args, noref_mode):
                 if rr_start < 0:
                     rr_start = 0
 
+                if rr_end < 0:
+                    rr_end = 0
+
                 ref_region = ref.fetch(cluster.chrom(), rr_start, rr_end)
                 
                 cluster.cons_align_map = minimap2_profile(ref_region, cluster.cons)
@@ -1500,6 +1506,9 @@ def process_cluster(cluster, inslib, outbase, args, noref_mode):
 
                         if out_start < 0:
                             out_start = 0
+                        
+                        if out_end < 0:
+                            out_end = 0
 
                         ext_ref = ref.fetch(cluster.chrom(), out_start, out_end)
                         out_cons = minimap2_extend(ext_ref, cluster.cons)
@@ -1520,6 +1529,9 @@ def process_cluster(cluster, inslib, outbase, args, noref_mode):
 
                             if out_start < 0:
                                 out_start = 0
+                            
+                            if out_end < 0:
+                                out_end = 0
 
                             for read in bam.fetch(cluster.chrom(), out_start, out_end):
                                 if not read.is_secondary and not read.is_supplementary:
@@ -1962,6 +1974,9 @@ def main(args):
 
                         if ins_start < 0:
                             ins_start = 0
+
+                        if ins_end < 0:
+                            ins_end = 0
 
                         if cluster.chrom() in nonref.contigs:
                             for nr in nonref.fetch(cluster.chrom(), ins_start, ins_end):
