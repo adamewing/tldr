@@ -21,7 +21,7 @@ git clone https://github.com/adamewing/tldr.git
 cd tldr
 conda env create -f tldr.yml
 conda activate tldr
-python setup.py install
+pip install -e $PWD
 tldr -h
 ```
 If you use the above method, make sure to activate the Conda environment first with `conda activate tldr` whenever using tldr.
