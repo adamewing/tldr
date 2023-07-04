@@ -968,20 +968,33 @@ def minimap2_pileup(cluster, dump_fq, outbase, min_alt_depth=3, min_alt_frac=.5,
     return altered_ref
 
 
-def minimap2_bam(ins_ref, dump_fq, outbam):
+def minimap2_bam(ins_ref, dump_fq, origbam, outbam, mm, ml):
 
     FNULL = open(os.devnull, 'w')
 
     mm2_cmd  = ['minimap2', '-x', 'map-ont', '-a', ins_ref, dump_fq]
-    view_cmd = ['samtools', 'view', '-b', '-']
+    view_cmd = ['samtools', 'view', '-u', '-']
     sort_cmd = ['samtools', 'sort', '-']
     aln  = subprocess.Popen(mm2_cmd, stdout=subprocess.PIPE, stderr=FNULL)
     view = subprocess.Popen(view_cmd, stdin=aln.stdout, stdout=subprocess.PIPE, stderr=FNULL)
     sort = subprocess.Popen(sort_cmd, stdin=view.stdout, stdout=subprocess.PIPE, stderr=FNULL)
 
-    with open(outbam, 'wb') as out:
-        for line in sort.stdout:
-            out.write(line)
+    save = pysam.set_verbosity(0)
+    bamstream = pysam.AlignmentFile(sort.stdout, 'rb')
+    pysam.set_verbosity(save)
+
+    out = pysam.AlignmentFile(outbam, 'wb', template=origbam)
+
+    for read in bamstream:
+        if read.qname in mm:
+            assert read.qname in ml
+
+            read.set_tag('Mm', mm[read.qname])
+            read.set_tag('Ml', ml[read.qname])
+
+        out.write(read)
+
+    out.close()
 
     subprocess.call(['samtools', 'index', outbam])
 
@@ -1533,6 +1546,10 @@ def process_cluster(cluster, inslib, outbase, args, noref_mode):
                             if out_end < 0:
                                 out_end = 0
 
+                            # track mod calls if present
+                            mm_dict = {}
+                            ml_dict = {}
+
                             for read in bam.fetch(cluster.chrom(), out_start, out_end):
                                 if not read.is_secondary and not read.is_supplementary:
                                     seq = read.seq
@@ -1542,13 +1559,23 @@ def process_cluster(cluster, inslib, outbase, args, noref_mode):
                                         logger.warning('skipped a read without seq/qual: %s' % read.qname)
                                         continue
 
+                                    if read.has_tag('Mm'):
+                                        mm_dict[read.qname] = read.get_tag('Mm')
+                                    if read.has_tag('MM'):
+                                        mm_dict[read.qname] = read.get_tag('MM')
+
+                                    if read.has_tag('Ml'):
+                                        ml_dict[read.qname] = read.get_tag('Ml')
+                                    if read.has_tag('ML'):
+                                        ml_dict[read.qname] = read.get_tag('ML')
+
                                     if read.is_reverse:
                                         seq = rc(seq)
                                         qual = qual[::-1]
 
                                     out_fq.write('@%s\n%s\n+\n%s\n' % (read.query_name, seq, qual))
 
-                        te_outbam = minimap2_bam(cons_out_fa, per_bam_fq, '%s/%s.%s.te.bam' % (outbase, sample, cluster.uuid))
+                        te_outbam = minimap2_bam(cons_out_fa, per_bam_fq, bam, '%s/%s.%s.te.bam' % (outbase, sample, cluster.uuid), mm_dict, ml_dict)
                         os.remove(per_bam_fq)
 
                 cluster.spanning_non_supporting_reads(int(args.wiggle), int(args.min_te_len))
