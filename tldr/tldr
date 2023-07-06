@@ -882,7 +882,7 @@ def te_align(te_fa, refseq, minmatch=80.0, te_fa_is_seq=False, max_segs=3):
 
     for subfam in align_groups:
         if best_group is None:
-            best_group = best_group = align_groups[subfam]
+            best_group = align_groups[subfam]
 
         elif align_groups[subfam].best_score() > best_group.best_score():
             best_group = align_groups[subfam]
@@ -968,7 +968,28 @@ def minimap2_pileup(cluster, dump_fq, outbase, min_alt_depth=3, min_alt_frac=.5,
     return altered_ref
 
 
-def minimap2_bam(ins_ref, dump_fq, origbam, outbam, mm, ml):
+def index_fai(fasta):
+    fai_out = fasta + '.fai'
+
+    if os.path.exists(fai_out):
+        logger.debug(f'index found for {fasta}: {fai_out}')
+        return fai_out
+    else:
+        logger.debug(f'building fai index for {fasta}: {fai_out}')
+
+    cmd = ['samtools', 'faidx', fasta]
+    
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    for line in p.stdout:
+        line = line.decode()
+
+    assert os.path.exists(fai_out), f'index failure: {fai_out}'
+
+    return fai_out
+
+
+def minimap2_bam(ins_ref, dump_fq, outbam, mm, ml):
 
     FNULL = open(os.devnull, 'w')
 
@@ -983,7 +1004,7 @@ def minimap2_bam(ins_ref, dump_fq, origbam, outbam, mm, ml):
     bamstream = pysam.AlignmentFile(sort.stdout, 'rb')
     pysam.set_verbosity(save)
 
-    out = pysam.AlignmentFile(outbam, 'wb', template=origbam)
+    out = pysam.AlignmentFile(outbam, 'wb', header=bamstream.header)
 
     for read in bamstream:
         if read.qname in mm:
@@ -1526,16 +1547,18 @@ def process_cluster(cluster, inslib, outbase, args, noref_mode):
                         ext_ref = ref.fetch(cluster.chrom(), out_start, out_end)
                         out_cons = minimap2_extend(ext_ref, cluster.cons)
 
-                    cons_out_fa = outbase + '/' + cluster.uuid + '.cons.ref.fa'
+                    cons_out_fa = f'{outbase}/{cluster.uuid}.cons.ref.fa'
 
                     with open(cons_out_fa, 'w') as out:
-                        out.write('>%s\n%s\n' % (cluster.uuid, out_cons))
+                        out.write('>%s\n%s\n' % (cluster.uuid.split('-')[0], out_cons))
+
+                    outbams = []
 
                     for sample in samples:
                         # add surrounding reads to fq
                         bampath = cluster.bampath(sample)
 
-                        per_bam_fq = '%s/%s.%s.cluster.fq' % (outbase, sample, cluster.uuid)
+                        per_bam_fq = '%s/%s.%s.cluster.fq' % (outbase, sample, cluster.uuid.split('-')[0])
                         
                         with open(per_bam_fq, 'w') as out_fq:
                             bam = pysam.AlignmentFile(bampath)
@@ -1575,8 +1598,29 @@ def process_cluster(cluster, inslib, outbase, args, noref_mode):
 
                                     out_fq.write('@%s\n%s\n+\n%s\n' % (read.query_name, seq, qual))
 
-                        te_outbam = minimap2_bam(cons_out_fa, per_bam_fq, bam, '%s/%s.%s.te.bam' % (outbase, sample, cluster.uuid), mm_dict, ml_dict)
+                        te_outbam = minimap2_bam(cons_out_fa, per_bam_fq, '%s/%s.%s.te.bam' % (outbase, sample, cluster.uuid), mm_dict, ml_dict)
+                        outbams.append(te_outbam)
+
                         os.remove(per_bam_fq)
+
+                    if args.methylartist:
+                        cons_aln = te_align(cons_seg_seq, out_cons, minmatch=95.0, te_fa_is_seq=True)
+                        h_l = cons_aln.min_tgt_coord()
+                        h_r = cons_aln.max_tgt_coord()
+
+                        index_fai(cons_out_fa)
+                        bamlist = ','.join([os.path.abspath(b) for b in outbams])
+
+                        ma_bed = f'{outbase}/{sample}.{cluster.uuid}.bed'
+
+                        with open(ma_bed, 'w') as bed_out:
+                            bed_out.write(f'{cluster.uuid.split("-")[0]}\t{h_l}\t{h_r}\t{cluster.te_major_subfam()}\t{cluster.te_orientation()}\n')
+
+                        ma_fn = f'{outbase}/{sample}.{cluster.uuid}.methylartist.cmd'
+
+                        with open(ma_fn, 'w') as ma_out:
+                            ma_cmd = f'methylartist locus -i {cluster.uuid.split("-")[0]}:{0}-{len(out_cons)} -l {h_l}-{h_r} -b {bamlist} -r {os.path.abspath(cons_out_fa)} --motif CG --nomask --bed {os.path.abspath(ma_bed)}\n'
+                            ma_out.write(ma_cmd)
 
                 cluster.spanning_non_supporting_reads(int(args.wiggle), int(args.min_te_len))
 
@@ -2176,5 +2220,6 @@ if __name__ == '__main__':
     parser.add_argument('--trdcol', action='store_true', default=False, help='add columns needed for transduction mapping')
     parser.add_argument('--keep_pickles', action='store_true', default=False, help='do not remove per-chromosome pickle files')
     parser.add_argument('--use_pickles', default=None, help='use .pickle files in specified folder instead of building from scratch')
+    parser.add_argument('--methylartist', action='store_true', help='generate methylartist commands, must be used with --detail_out')
     args = parser.parse_args()
     main(args)
