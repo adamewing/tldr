@@ -1605,24 +1605,28 @@ def process_cluster(cluster, inslib, outbase, args, noref_mode):
 
                     if args.methylartist:
                         cons_aln = te_align(cons_seg_seq, out_cons, minmatch=95.0, te_fa_is_seq=True)
-                        h_l = cons_aln.min_tgt_coord()
-                        h_r = cons_aln.max_tgt_coord()
+                        if cons_aln is None:
+                            logger.debug(f'warning: cons_aln is None at {cluster.uuid}')
+                        
+                        else:
+                            h_l = cons_aln.min_tgt_coord()
+                            h_r = cons_aln.max_tgt_coord()
 
-                        index_fai(cons_out_fa)
-                        bamlist = ','.join([os.path.abspath(b) for b in outbams])
+                            index_fai(cons_out_fa)
+                            bamlist = ','.join([os.path.abspath(b) for b in outbams])
 
-                        ma_bed = f'{outbase}/{sample}.{cluster.uuid}.bed'
+                            ma_bed = f'{outbase}/{sample}.{cluster.uuid}.bed'
 
-                        with open(ma_bed, 'w') as bed_out:
-                            bed_out.write(f'{cluster.uuid.split("-")[0]}\t{h_l}\t{h_r}\t{cluster.te_major_subfam()}\t{cluster.te_orientation()}\n')
+                            with open(ma_bed, 'w') as bed_out:
+                                bed_out.write(f'{cluster.uuid.split("-")[0]}\t{h_l}\t{h_r}\t{cluster.te_major_subfam()}\t{cluster.te_orientation()}\n')
 
-                        ma_fn = f'{outbase}/{sample}.{cluster.uuid}.methylartist.cmd'
+                            ma_fn = f'{outbase}/{sample}.{cluster.uuid}.methylartist.cmd'
 
-                        with open(ma_fn, 'w') as ma_out:
-                            ma_loc_cmd = f'methylartist locus -i {cluster.uuid.split("-")[0]}:{0}-{len(out_cons)} -l {h_l}-{h_r} -b {bamlist} -r {os.path.abspath(cons_out_fa)} --motif CG --nomask --bed {os.path.abspath(ma_bed)}\n'
-                            ma_seg_cmd = f'methylartist segmeth -b {bamlist} -i {os.path.abspath(ma_bed)} --ref {os.path.abspath(cons_out_fa)} --motif CG\n'
-                            ma_out.write(ma_loc_cmd)
-                            ma_out.write(ma_seg_cmd)
+                            with open(ma_fn, 'w') as ma_out:
+                                ma_loc_cmd = f'methylartist locus -i {cluster.uuid.split("-")[0]}:{0}-{len(out_cons)} -l {h_l}-{h_r} -b {bamlist} -r {os.path.abspath(cons_out_fa)} --motif CG --nomask --bed {os.path.abspath(ma_bed)}\n'
+                                ma_seg_cmd = f'methylartist segmeth -b {bamlist} -i {os.path.abspath(ma_bed)} --ref {os.path.abspath(cons_out_fa)} --motif CG\n'
+                                ma_out.write(ma_loc_cmd)
+                                ma_out.write(ma_seg_cmd)
 
                 cluster.spanning_non_supporting_reads(int(args.wiggle), int(args.min_te_len))
 
