@@ -18,6 +18,7 @@ from collections import defaultdict as dd
 from collections import OrderedDict as od
 from collections import Counter
 from bx.intervals.intersection import Intersecter, Interval
+from tqdm import tqdm
 
 from sklearn import metrics
 from sklearn.mixture import GaussianMixture
@@ -245,7 +246,7 @@ class InsCluster:
         self.breakpoints = []
         self.breakpoints_remappable = False
         self.tsd_seq = 'NA'
-        self.empty_reads = dd(int)
+        self.empty_reads = dd(list)
 
     def add(self, read, flanksize=200):
         self.reads.append(read)
@@ -389,7 +390,7 @@ class InsCluster:
 
         return self.cons_te_align.max_qry_orient() != self.cons_te_align.min_qry_orient()
 
-    def spanning_non_supporting_reads(self, wiggle, min_te_len, cov_pct=.95):
+    def spanning_non_supporting_reads(self, wiggle, min_te_len, cov_pct=0.95):
         read_names = set([read.r_name for read in self.reads if read.useable])
 
         for bampath in set([read.bampath for read in self.reads if read.useable]):
@@ -434,13 +435,13 @@ class InsCluster:
                         in_region = False
 
                 if gap < min_te_len and float(cov) > ((te_ins_end-te_ins_start)+(wiggle*2))*cov_pct:
-                    self.empty_reads[bamname] += 1
+                    self.empty_reads[bamname].append(get_phase(r))
 
     def empty_reads_count(self):
         if len(self.empty_reads) == 0:
             return 'NA'
 
-        return ','.join(['|'.join(map(str, k)) for k in self.empty_reads.items()])
+        return ','.join(['%s|%d' % (sample, len(self.empty_reads[sample])) for sample in self.empty_reads])
 
     def trim_reads(self, flanksize=200):
         for read in self.reads:
@@ -704,6 +705,9 @@ class InsCluster:
         p = dd(list)
 
         for read in self.reads:
+            if not read.useable:
+                continue
+
             if read.phase != 'unphased':
                 p[read.bamname].append(read.phase)
 
@@ -717,6 +721,18 @@ class InsCluster:
 
         else:
             return 'NA'
+        
+    def empty_phase(self):
+        out = []
+        for sample in self.empty_reads:
+            out.append(sample + '|' + '|'.join(['%s:%d' % (phase, count) for phase, count in Counter(self.empty_reads[sample]).items()]))
+
+        if out:
+            return ';'.join(out)
+        
+        else:
+            return 'NA'
+
 
 
 class ExonerateAlignment:
@@ -819,6 +835,27 @@ def has_homopol(dna, n):
             return True
 
     return False
+
+
+def get_phase(read):
+    phase = 'unphased'
+
+    HP = None
+    PS = None
+
+    for tag in read.get_tags():
+        if tag[0] == 'HP':
+            HP = tag[1]
+        if tag[0] == 'PS':
+            PS = tag[1]
+
+    if None not in (HP, PS):
+        phase = str(PS) + ':' + str(HP)
+    
+    if PS is None and HP is not None:
+        phase=str(PS) + ':NA'
+    
+    return phase
 
 
 def mafft(in_fn):
@@ -1732,19 +1769,7 @@ def build_clusters(args, outbase, chrom):
                     if q_end in ap:
                         r_end = ap[q_end]
 
-                    phase = 'unphased'
-
-                    HP = None
-                    PS = None
-
-                    for tag in read.get_tags():
-                        if tag[0] == 'HP':
-                            HP = tag[1]
-                        if tag[0] == 'PS':
-                            PS = tag[1]
-
-                    if None not in (HP, PS):
-                        phase = str(PS) + ':' + str(HP)
+                    phase = get_phase(read)
 
                     ins_read = InsRead(bam.filename.decode(), read.reference_name, q_start, q_end, r_start, r_end, read.qname, read.seq, read.qual, read.mapq, is_ins, is_clip, clip_end, phase)
 
@@ -1856,6 +1881,7 @@ header = [
 'NumSamples',
 'SampleReads',
 'EmptyReads',
+'EmptyPhase',
 'NonRef',
 'TSD',
 'Consensus',
@@ -2008,8 +2034,10 @@ def main(args):
                 res = pool.apply_async(process_cluster, [cluster, inslib, outbase, args, noref_mode])
                 reslist.append(res)
 
+            logger.info('processing clusters')
+
             processed_clusters = []
-            for res in reslist:
+            for res in tqdm(reslist):
                 processed_clusters.append(res.get())
 
             c_count = 0
@@ -2026,7 +2054,7 @@ def main(args):
                     cinfo['UsedReads'] = cluster.te_useable_count()
                     cluster_forest[cluster.chrom()].add_interval(Interval(int(cluster.breakpoints[0]), int(cluster.breakpoints[1]), value=cinfo))
 
-            for cluster in processed_clusters:
+            for cluster in tqdm(processed_clusters):
                 if cluster and cluster.cons:
                     tracking = False
 
@@ -2103,6 +2131,7 @@ def main(args):
                     output['NumSamples']  = cluster.te_samples()
                     output['SampleReads'] = cluster.te_sample_count()
                     output['EmptyReads']  = cluster.empty_reads_count()
+                    output['EmptyPhase']  = cluster.empty_phase()
                     output['NonRef']      = nr
                     output['TSD']         = cluster.tsd_seq
                     output['Consensus']   = cluster.cons
