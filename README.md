@@ -195,6 +195,9 @@ Per-sample accounting of supporting reads
 ### EmptyReads
 Number of reads spanning both TSDs +/- `--wiggle` parameter with no evidence for insertion, useful for inferring genotype
 
+### EmptyPhase
+Phase/Haplotype info for empty site reads (requires PS/HP tags to be present)
+
 ### NonRef
 If `-n/--nonref` given, annotate whether insertion is a known non-reference insertion ("NA" otherwise)
 
@@ -203,6 +206,9 @@ Target site duplication (based on reference genome)
 
 ### Consensus
 Upper case bases = reference genome sequence, lower case bases = insertion sequence. If `--color_consensus` given TSD will be red, TE will be blue, other inserted sequence (e.g. transduction) will be yellow using ANSI terminal colours (may be affected by specific terminal config)
+
+### Phasing
+Phase/Haplotype info for filled site reads (requires PS/HP tags to be present)
 
 ### Filter
 Annotate whether an insertion call is problematic; "PASS" otherwise (similar to VCF filter column).
