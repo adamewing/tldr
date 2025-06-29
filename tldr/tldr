@@ -1966,9 +1966,7 @@ def main(args):
         header.append('Transduction_5p')
         header.append('Transduction_3p')
 
-    table_out = open(outbase+'.table.txt', 'w')
-    table_out.write('%s\n' % '\t'.join(header))
-
+    output_recs = []
     targets = None
 
     if args.targets is not None:
@@ -2183,7 +2181,6 @@ def main(args):
                         output['Transduction_5p'] = trd_5p
                         output['Transduction_3p'] = trd_3p
 
-
                     if args.color_consensus:
                         C_YELLOW  = "\033[33m"
                         C_BLUE    = "\033[34m"
@@ -2204,7 +2201,7 @@ def main(args):
 
                         output['Consensus'] = cluster.cons[:c_unmap[0]-tsd_len]+tsd_1+C_YELLOW+col_seg+C_END+tsd_2+cluster.cons[c_unmap[1]+tsd_len:]
 
-                    table_out.write('%s\n' % '\t'.join(map(str, [output[col] for col in header])))
+                    output_recs.append(output)
 
                     logger.debug('finish output cluster %d of %d' % (c_tot, len(processed_clusters)))
 
@@ -2227,7 +2224,96 @@ def main(args):
             else:
                 os.remove(pickle_fn)
 
-    table_out.close()
+    output_table(args, output_recs, header, outbase)
+
+
+def output_table(args, output_recs, header, outbase):
+    out_fn = outbase+'.table.txt'
+
+    seqdict = {}
+    lendict = {}
+
+    for rec in output_recs:
+        seqdict[rec['UUID']] = rec['Consensus']
+        lendict[rec['UUID']] = rec['LengthIns']
+
+    pass_remap = remap_full_check(lendict, seqdict, args.ref)
+
+    with open(out_fn, 'w') as table_out:
+        table_out.write('%s\n' % '\t'.join(header))
+
+        for rec in output_recs:
+            if not pass_remap[rec['UUID']]:
+                if rec['Filter'] == 'PASS':
+                    rec['Filter'] = 'AltIns'
+                else:
+                    rec['Filter'] = rec['Filter'] + ',AltIns'
+
+            table_out.write('%s\n' % '\t'.join(map(str, [rec[col] for col in header])))
+
+
+def strip_seq(seq):
+     nt = ['A', 'T', 'C', 'G']
+     return ''.join([b for b in list(seq.upper()) if b in nt])
+
+
+def remap_full_check(lendict, seqdict, ref, flanksize=500):
+    success = {}
+
+    for id, seq in seqdict.items():
+        seqdict[id] = strip_seq(seq)
+
+    tmp_cons = str(uuid4()) + '.fa'
+
+    with open(tmp_cons, 'w') as out:
+        for id, seq in seqdict.items():
+            out.write(f'>{id}\n{seq}\n')
+            success[id] = True
+
+    FNULL = open(os.devnull, 'w')
+
+    mm2_cmd  = ['minimap2', '-x', 'map-ont', '-Y', '-a', ref, tmp_cons]
+    view_cmd = ['samtools', 'view', '-b', '-']
+
+    aln  = subprocess.Popen(mm2_cmd, stdout=subprocess.PIPE, stderr=FNULL)
+    view = subprocess.Popen(view_cmd, stdin=aln.stdout, stdout=subprocess.PIPE, stderr=FNULL)
+
+    save = pysam.set_verbosity(0)
+    bamstream = pysam.AlignmentFile(view.stdout, 'rb')
+    pysam.set_verbosity(save)
+
+    n_rp_list = dd(list)
+
+    for read in bamstream:
+        if not read.is_unmapped:
+            inslen = int(lendict[read.query_name])
+            n_rp = len(read.get_reference_positions())
+            exp_len = len(read.query_sequence)-inslen*.5
+
+            if read.cigartuples[0][0]==4 and read.cigartuples[0][1] > flanksize/2:
+                continue
+
+            if read.cigartuples[-1][0]==4 and read.cigartuples[-1][1] > flanksize/2:
+                continue
+
+            n_rp_list[read.query_name].append(n_rp)
+
+            if n_rp > exp_len:
+                success[read.query_name] = False
+
+    for uuid in n_rp_list:
+        s0 = sorted(n_rp_list[uuid], reverse=True)[0]
+        s1 = 0
+
+        if len(n_rp_list[uuid]) > 1:
+            s1 = sorted(n_rp_list[uuid], reverse=True)[1]
+
+        if s1*1.1 > s0:
+            success[uuid] = False
+
+    os.remove(tmp_cons)
+
+    return success
 
 
 if __name__ == '__main__':
