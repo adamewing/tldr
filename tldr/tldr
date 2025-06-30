@@ -2463,7 +2463,7 @@ if __name__ == '__main__':
     parser.add_argument('--detail_output', action='store_true', default=False, help='outputs per-insertion .bams and per-read mapping information')
     parser.add_argument('--extend_consensus', default=0, help='if --detail_output option is enabled, extend output per-sample consensus by n bases (default 0)')
     parser.add_argument('--trdcol', action='store_true', default=False, help='add columns needed for transduction mapping')
-    parser.add_argument('--somatic', action='store_true', default=False, help='predict somatic from phase information, triggers additional filtering')
+    parser.add_argument('--somatic', action='store_true', default=False, help='predict somatic from phase information')
     parser.add_argument('--keep_pickles', action='store_true', default=False, help='do not remove per-chromosome pickle files')
     parser.add_argument('--use_pickles', default=None, help='use .pickle files in specified folder instead of building from scratch')
     parser.add_argument('--methylartist', action='store_true', help='generate methylartist commands, must be used with --detail_out')
