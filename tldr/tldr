@@ -589,13 +589,6 @@ class InsCluster:
         return self.cons
 
 
-    def reset_breakpoints(self, map_start, map_end):
-        ''' reset breakpoints based on refined te mapping information '''
-        assert len(self.breakpoints) == 2
-        if cons_align_map is None:
-            return None
-
-
     def mask_cons(self, trim=True):
         if self.cons_align_map is None:
             return self.cons
@@ -1861,6 +1854,213 @@ def assign_filter(output, c_unmap, args, noref_mode, cluster_forest):
     return 'PASS'
 
 
+def output_table(args, output_recs, header, outbase):
+    out_fn = outbase+'.table.txt'
+
+    seqdict = {}
+    lendict = {}
+
+    for rec in output_recs:
+        seqdict[rec['UUID']] = rec['Consensus']
+        lendict[rec['UUID']] = rec['LengthIns']
+
+    pass_remap = remap_full_check(lendict, seqdict, args.ref)
+    flank_mapq = remap_flanks(seqdict, args.ref)
+
+    with open(out_fn, 'w') as table_out:
+        table_out.write('%s\n' % '\t'.join(header))
+
+        for rec in output_recs:
+            if not pass_remap[rec['UUID']]:
+                if rec['Filter'] == 'PASS':
+                    rec['Filter'] = 'AltIns'
+                else:
+                    rec['Filter'] = rec['Filter'] + ',AltIns'
+
+            if max(flank_mapq[rec['UUID']]) < 10:
+                if rec['Filter'] == 'PASS':
+                    rec['Filter'] = 'FlankMapQ'
+                else:
+                    rec['Filter'] = rec['Filter'] + ',FlankMapQ'
+        
+            table_out.write('%s\n' % '\t'.join(map(str, [rec[col] for col in header])))
+
+
+def strip_seq(seq):
+     nt = ['A', 'T', 'C', 'G']
+     return ''.join([b for b in list(seq.upper()) if b in nt])
+
+
+def remap_full_check(lendict, seqdict, ref, flanksize=500):
+    success = {}
+
+    for id, seq in seqdict.items():
+        seqdict[id] = strip_seq(seq)
+
+    tmp_cons = str(uuid4()) + '.fa'
+
+    with open(tmp_cons, 'w') as out:
+        for id, seq in seqdict.items():
+            out.write(f'>{id}\n{seq}\n')
+            success[id] = True
+
+    FNULL = open(os.devnull, 'w')
+
+    mm2_cmd  = ['minimap2', '-x', 'map-ont', '-Y', '-a', ref, tmp_cons]
+    view_cmd = ['samtools', 'view', '-b', '-']
+
+    aln  = subprocess.Popen(mm2_cmd, stdout=subprocess.PIPE, stderr=FNULL)
+    view = subprocess.Popen(view_cmd, stdin=aln.stdout, stdout=subprocess.PIPE, stderr=FNULL)
+
+    save = pysam.set_verbosity(0)
+    bamstream = pysam.AlignmentFile(view.stdout, 'rb')
+    pysam.set_verbosity(save)
+
+    n_rp_list = dd(list)
+
+    for read in bamstream:
+        if not read.is_unmapped:
+            inslen = int(lendict[read.query_name])
+            n_rp = len(read.get_reference_positions())
+            exp_len = len(read.query_sequence)-inslen*.5
+
+            if read.cigartuples[0][0]==4 and read.cigartuples[0][1] > flanksize/2:
+                continue
+
+            if read.cigartuples[-1][0]==4 and read.cigartuples[-1][1] > flanksize/2:
+                continue
+
+            n_rp_list[read.query_name].append(n_rp)
+
+            if n_rp > exp_len:
+                success[read.query_name] = False
+
+    for uuid in n_rp_list:
+        s0 = sorted(n_rp_list[uuid], reverse=True)[0]
+        s1 = 0
+
+        if len(n_rp_list[uuid]) > 1:
+            s1 = sorted(n_rp_list[uuid], reverse=True)[1]
+
+        if s1*1.1 > s0:
+            success[uuid] = False
+
+    os.remove(tmp_cons)
+
+    return success
+
+
+def remap_flanks(seqdict, ref, flanksize=500):
+    flank_mapq = {}
+
+    for id, seq in seqdict.items():
+        seqdict[id] = strip_seq(seq)
+
+    tmp_cons = str(uuid4()) + '.fa'
+
+    with open(tmp_cons, 'w') as out:
+        for id, seq in seqdict.items():
+            left_seq = seq[:flanksize]
+            right_seq = seq[-flanksize:]
+
+            out.write(f'>{id}.0\n{left_seq}\n')
+            out.write(f'>{id}.1\n{right_seq}\n')
+
+            flank_mapq[id] = [-1,-1]
+
+    FNULL = open(os.devnull, 'w')
+
+    mm2_cmd  = ['minimap2', '-x', 'map-ont', '-Y', '-a', ref, tmp_cons]
+    view_cmd = ['samtools', 'view', '-b', '-']
+
+    aln  = subprocess.Popen(mm2_cmd, stdout=subprocess.PIPE, stderr=FNULL)
+    view = subprocess.Popen(view_cmd, stdin=aln.stdout, stdout=subprocess.PIPE, stderr=FNULL)
+
+    save = pysam.set_verbosity(0)
+    bamstream = pysam.AlignmentFile(view.stdout, 'rb')
+    pysam.set_verbosity(save)
+
+    n_rp_list = dd(list)
+
+    for read in bamstream:
+        if not read.is_unmapped:
+            uuid = '.'.join(read.query_name.split('.')[:-1])
+            flank = int(read.query_name.split('.')[-1])
+            assert flank in (0,1)
+            mapq = read.mapping_quality
+
+            if flank_mapq[uuid][flank] == -1:
+                flank_mapq[uuid][flank] = mapq
+            else:
+                if mapq < flank_mapq[uuid][flank]:
+                    flank_mapq[uuid][flank] = mapq
+
+    os.remove(tmp_cons)
+
+    return flank_mapq
+
+
+def predict_somatic(rec, max_vaf=0.4, min_mapq=10.0):
+    nonref = rec['NonRef']
+    num_samples = int(rec['NumSamples'])
+    filled_phase = rec['Phasing']
+    empty_phase = rec['EmptyPhase']
+
+    if float(rec['MedianMapQ']) < min_mapq:
+        return 'UNKNOWN'
+
+    if num_samples > 1:
+        return 'GERMLINE'
+    
+    if nonref != 'NA':
+        return 'GERMLINE'
+
+    if 'NA' in (filled_phase, empty_phase):
+        return 'UNKNOWN'
+
+    fph = dd(list)
+    eph = dd(list)
+
+    fph_info = filled_phase.split("|")[1:]
+    eph_info = empty_phase.split("|")[1:]
+
+    shared_ps = [] # phase sets in filled and empty
+
+    for ph in fph_info:
+        ps, hp, rc = ph.split(':')
+        if int(rc) >= 1:
+            fph[ps].append((hp, int(rc)))
+    
+    for ph in eph_info:
+        if ph.startswith('unphased'):
+            continue
+
+        ps, hp, rc = ph.split(':')
+        if int(rc) >= 2: # more stringent about both alleles in empty site
+            eph[ps].append((hp, int(rc)))
+
+        if ps in fph:
+            shared_ps.append(ps)
+    
+    shared_ps = list(set(shared_ps))
+
+    if len(shared_ps) == 0:
+        return 'UNKNOWN'
+
+    for ps in shared_ps:
+        if not (len(fph[ps]) == 1 and len(eph[ps]) > 1):
+            return 'GERMLINE'
+
+    for ps in shared_ps:
+        f_count = sum([ph[1] for ph in fph[ps]])
+        e_count = sum([ph[1] for ph in eph[ps]])
+
+        if f_count/e_count > max_vaf:
+            return 'UNKNOWN'
+
+    return 'SOMATIC'
+
+
 header = [
 'UUID',
 'Chrom',
@@ -1965,6 +2165,9 @@ def main(args):
 
         header.append('Transduction_5p')
         header.append('Transduction_3p')
+
+    if args.somatic:
+        header.append('Somatic')
 
     output_recs = []
     targets = None
@@ -2160,6 +2363,9 @@ def main(args):
 
                                 detail_out.write('%s\n' % '\t'.join(map(str, [detail[col] for col in detail_header])))
 
+                    if args.somatic:
+                        output['Somatic'] = predict_somatic(output)
+
                     if args.trdcol:
                         trd_5p = 'NA'
                         trd_3p = 'NA'
@@ -2227,99 +2433,10 @@ def main(args):
     output_table(args, output_recs, header, outbase)
 
 
-def output_table(args, output_recs, header, outbase):
-    out_fn = outbase+'.table.txt'
-
-    seqdict = {}
-    lendict = {}
-
-    for rec in output_recs:
-        seqdict[rec['UUID']] = rec['Consensus']
-        lendict[rec['UUID']] = rec['LengthIns']
-
-    pass_remap = remap_full_check(lendict, seqdict, args.ref)
-
-    with open(out_fn, 'w') as table_out:
-        table_out.write('%s\n' % '\t'.join(header))
-
-        for rec in output_recs:
-            if not pass_remap[rec['UUID']]:
-                if rec['Filter'] == 'PASS':
-                    rec['Filter'] = 'AltIns'
-                else:
-                    rec['Filter'] = rec['Filter'] + ',AltIns'
-
-            table_out.write('%s\n' % '\t'.join(map(str, [rec[col] for col in header])))
-
-
-def strip_seq(seq):
-     nt = ['A', 'T', 'C', 'G']
-     return ''.join([b for b in list(seq.upper()) if b in nt])
-
-
-def remap_full_check(lendict, seqdict, ref, flanksize=500):
-    success = {}
-
-    for id, seq in seqdict.items():
-        seqdict[id] = strip_seq(seq)
-
-    tmp_cons = str(uuid4()) + '.fa'
-
-    with open(tmp_cons, 'w') as out:
-        for id, seq in seqdict.items():
-            out.write(f'>{id}\n{seq}\n')
-            success[id] = True
-
-    FNULL = open(os.devnull, 'w')
-
-    mm2_cmd  = ['minimap2', '-x', 'map-ont', '-Y', '-a', ref, tmp_cons]
-    view_cmd = ['samtools', 'view', '-b', '-']
-
-    aln  = subprocess.Popen(mm2_cmd, stdout=subprocess.PIPE, stderr=FNULL)
-    view = subprocess.Popen(view_cmd, stdin=aln.stdout, stdout=subprocess.PIPE, stderr=FNULL)
-
-    save = pysam.set_verbosity(0)
-    bamstream = pysam.AlignmentFile(view.stdout, 'rb')
-    pysam.set_verbosity(save)
-
-    n_rp_list = dd(list)
-
-    for read in bamstream:
-        if not read.is_unmapped:
-            inslen = int(lendict[read.query_name])
-            n_rp = len(read.get_reference_positions())
-            exp_len = len(read.query_sequence)-inslen*.5
-
-            if read.cigartuples[0][0]==4 and read.cigartuples[0][1] > flanksize/2:
-                continue
-
-            if read.cigartuples[-1][0]==4 and read.cigartuples[-1][1] > flanksize/2:
-                continue
-
-            n_rp_list[read.query_name].append(n_rp)
-
-            if n_rp > exp_len:
-                success[read.query_name] = False
-
-    for uuid in n_rp_list:
-        s0 = sorted(n_rp_list[uuid], reverse=True)[0]
-        s1 = 0
-
-        if len(n_rp_list[uuid]) > 1:
-            s1 = sorted(n_rp_list[uuid], reverse=True)[1]
-
-        if s1*1.1 > s0:
-            success[uuid] = False
-
-    os.remove(tmp_cons)
-
-    return success
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Find TE insertions in ONT data')
 
-    __version__ = "1.2.2"
+    __version__ = "1.3.0"
     parser.add_argument('-v', '--version', action='version', version='%(prog)s {version}'.format(version=__version__))
 
     parser.add_argument('-b', '--bams', required=True, help='comma seperated bam list')
@@ -2346,6 +2463,7 @@ if __name__ == '__main__':
     parser.add_argument('--detail_output', action='store_true', default=False, help='outputs per-insertion .bams and per-read mapping information')
     parser.add_argument('--extend_consensus', default=0, help='if --detail_output option is enabled, extend output per-sample consensus by n bases (default 0)')
     parser.add_argument('--trdcol', action='store_true', default=False, help='add columns needed for transduction mapping')
+    parser.add_argument('--somatic', action='store_true', default=False, help='predict somatic from phase information, triggers additional filtering')
     parser.add_argument('--keep_pickles', action='store_true', default=False, help='do not remove per-chromosome pickle files')
     parser.add_argument('--use_pickles', default=None, help='use .pickle files in specified folder instead of building from scratch')
     parser.add_argument('--methylartist', action='store_true', help='generate methylartist commands, must be used with --detail_out')
