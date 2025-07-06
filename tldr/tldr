@@ -1017,7 +1017,7 @@ def index_fai(fasta):
     return fai_out
 
 
-def minimap2_bam(ins_ref, dump_fq, outbam, mm, ml):
+def minimap2_bam(ins_ref, dump_fq, outbam, mm, ml, hp, ps):
 
     FNULL = open(os.devnull, 'w')
 
@@ -1040,6 +1040,12 @@ def minimap2_bam(ins_ref, dump_fq, outbam, mm, ml):
 
             read.set_tag('MM', mm[read.qname])
             read.set_tag('ML', ml[read.qname])
+
+        if read.qname in hp:
+            assert read.qname in ps
+
+            read.set_tag('PS', ps[read.qname])
+            read.set_tag('HP', hp[read.qname])
 
         out.write(read)
 
@@ -1601,6 +1607,10 @@ def process_cluster(cluster, inslib, outbase, args, noref_mode):
                             mm_dict = {}
                             ml_dict = {}
 
+                            # track phasing if present
+                            hp_dict = {}
+                            ps_dict = {}
+
                             for read in bam.fetch(cluster.chrom(), out_start, out_end):
                                 if not read.is_secondary and not read.is_supplementary:
                                     seq = read.seq
@@ -1620,13 +1630,19 @@ def process_cluster(cluster, inslib, outbase, args, noref_mode):
                                     if read.has_tag('ML'):
                                         ml_dict[read.qname] = read.get_tag('ML')
 
+                                    if read.has_tag('HP'):
+                                        hp_dict[read.qname] = read.get_tag('HP')
+
+                                    if read.has_tag('PS'):
+                                        ps_dict[read.qname] = read.get_tag('PS')
+
                                     if read.is_reverse:
                                         seq = rc(seq)
                                         qual = qual[::-1]
 
                                     out_fq.write('@%s\n%s\n+\n%s\n' % (read.query_name, seq, qual))
 
-                        te_outbam = minimap2_bam(cons_out_fa, per_bam_fq, '%s/%s.%s.te.bam' % (outbase, sample, cluster.uuid), mm_dict, ml_dict)
+                        te_outbam = minimap2_bam(cons_out_fa, per_bam_fq, '%s/%s.%s.te.bam' % (outbase, sample, cluster.uuid), mm_dict, ml_dict, hp_dict, ps_dict)
                         outbams.append(te_outbam)
 
                         os.remove(per_bam_fq)
@@ -1862,24 +1878,26 @@ def output_table(args, output_recs, header, outbase):
         seqdict[rec['UUID']] = rec['Consensus']
         lendict[rec['UUID']] = rec['LengthIns']
 
-    pass_remap = remap_full_check(lendict, seqdict, args.ref)
-    flank_mapq = remap_flanks(seqdict, args.ref)
+    if args.strict:
+        pass_remap = remap_full_check(lendict, seqdict, args.ref)
+        flank_mapq = remap_flanks(seqdict, args.ref)
 
     with open(out_fn, 'w') as table_out:
         table_out.write('%s\n' % '\t'.join(header))
 
         for rec in output_recs:
-            if not pass_remap[rec['UUID']]:
-                if rec['Filter'] == 'PASS':
-                    rec['Filter'] = 'AltIns'
-                else:
-                    rec['Filter'] = rec['Filter'] + ',AltIns'
+            if args.strict:
+                if not pass_remap[rec['UUID']]:
+                    if rec['Filter'] == 'PASS':
+                        rec['Filter'] = 'AltIns'
+                    else:
+                        rec['Filter'] = rec['Filter'] + ',AltIns'
 
-            if max(flank_mapq[rec['UUID']]) < 10:
-                if rec['Filter'] == 'PASS':
-                    rec['Filter'] = 'FlankMapQ'
-                else:
-                    rec['Filter'] = rec['Filter'] + ',FlankMapQ'
+                if max(flank_mapq[rec['UUID']]) < 10:
+                    if rec['Filter'] == 'PASS':
+                        rec['Filter'] = 'FlankMapQ'
+                    else:
+                        rec['Filter'] = rec['Filter'] + ',FlankMapQ'
         
             table_out.write('%s\n' % '\t'.join(map(str, [rec[col] for col in header])))
 
@@ -2169,6 +2187,7 @@ def main(args):
 
     if args.somatic:
         header.append('Somatic')
+        args.strict = True
 
     output_recs = []
     targets = None
@@ -2464,7 +2483,8 @@ if __name__ == '__main__':
     parser.add_argument('--detail_output', action='store_true', default=False, help='outputs per-insertion .bams and per-read mapping information')
     parser.add_argument('--extend_consensus', default=0, help='if --detail_output option is enabled, extend output per-sample consensus by n bases (default 0)')
     parser.add_argument('--trdcol', action='store_true', default=False, help='add columns needed for transduction mapping')
-    parser.add_argument('--somatic', action='store_true', default=False, help='predict somatic from phase information')
+    parser.add_argument('--somatic', action='store_true', default=False, help='predict somatic from phase information, turns on --strict')
+    parser.add_argument('--strict', action='store_true', default=False, help='additional filters')
     parser.add_argument('--keep_pickles', action='store_true', default=False, help='do not remove per-chromosome pickle files')
     parser.add_argument('--use_pickles', default=None, help='use .pickle files in specified folder instead of building from scratch')
     parser.add_argument('--methylartist', action='store_true', help='generate methylartist commands, must be used with --detail_out')
