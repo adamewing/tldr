@@ -701,8 +701,7 @@ class InsCluster:
             if not read.useable:
                 continue
 
-            if read.phase != 'unphased':
-                p[read.bamname].append(read.phase)
+            p[read.bamname].append(read.phase)
 
         out = []
 
@@ -725,7 +724,6 @@ class InsCluster:
         
         else:
             return 'NA'
-
 
 
 class ExonerateAlignment:
@@ -1040,8 +1038,8 @@ def minimap2_bam(ins_ref, dump_fq, outbam, mm, ml):
         if read.qname in mm:
             assert read.qname in ml
 
-            read.set_tag('Mm', mm[read.qname])
-            read.set_tag('Ml', ml[read.qname])
+            read.set_tag('MM', mm[read.qname])
+            read.set_tag('ML', ml[read.qname])
 
         out.write(read)
 
@@ -2027,6 +2025,9 @@ def predict_somatic(rec, max_vaf=0.4, min_mapq=10.0):
     shared_ps = [] # phase sets in filled and empty
 
     for ph in fph_info:
+        if ph.startswith('unphased'):
+            continue
+
         ps, hp, rc = ph.split(':')
         if int(rc) >= 1:
             fph[ps].append((hp, int(rc)))
