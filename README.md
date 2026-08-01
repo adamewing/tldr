@@ -115,7 +115,7 @@ Specify a text file of chromosome names (one per line) and tldr will focus only 
 Maximum insertion size (default = 10000)
 
 ### --min_te_len
-Minimum insertion size (default = 200)
+Minimum insertion size (default = 100)
 
 ### --min_alt_frac
 Parameter for allowing base changes in consensus cleanup (default = 0.5)
